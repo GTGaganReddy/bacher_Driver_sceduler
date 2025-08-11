@@ -1,0 +1,406 @@
+"""
+Driver Route Assignment Optimization using OR-Tools
+Optimizes driver assignments for a full week considering:
+- Monthly hour limits and remaining hours
+- Daily availability and hour constraints
+- Maximum routes per driver per day
+- Special Saturday rule for route 452SA
+- Prioritizes drivers with most remaining monthly hours
+"""
+
+from ortools.linear_solver import pywraplp
+from datetime import datetime, timedelta
+import json
+from typing import Dict, List, Tuple, Optional
+
+class DriverRouteOptimizer:
+    def __init__(self):
+        self.solver = None
+        self.drivers = []
+        self.routes = []
+        self.availability = []
+        self.assignments = {}
+        
+    def optimize_assignments(self, drivers_data: List[Dict], routes_data: List[Dict], 
+                           availability_data: List[Dict]) -> Dict:
+        """
+        Main optimization function
+        
+        Args:
+            drivers_data: List of driver dictionaries with id, name, monthly_hours
+            routes_data: List of route dictionaries with date, route_name, duration
+            availability_data: List of availability records with driver_id, date, available, 
+                             available_hours, max_routes
+        
+        Returns:
+            Dict: Optimal assignments {date: {driver_id: route_name}}
+        """
+        
+        self.drivers = drivers_data
+        self.routes = routes_data
+        self.availability = availability_data
+        
+        # Parse and validate data
+        parsed_data = self._parse_input_data()
+        if not parsed_data:
+            return {"error": "Failed to parse input data"}
+        
+        # Create solver
+        self.solver = pywraplp.Solver.CreateSolver('SCIP')
+        if not self.solver:
+            return {"error": "Could not create solver"}
+        
+        # Build optimization model
+        self._build_optimization_model(parsed_data)
+        
+        # Solve
+        status = self.solver.Solve()
+        
+        if status == pywraplp.Solver.OPTIMAL or status == pywraplp.Solver.FEASIBLE:
+            return self._extract_solution(parsed_data)
+        else:
+            return {"error": f"No solution found. Status: {status}"}
+    
+    def _parse_input_data(self) -> Optional[Dict]:
+        """Parse and structure input data for optimization"""
+        try:
+            # Create driver lookup and parse monthly hours
+            driver_info = {}
+            for driver in self.drivers:
+                monthly_hours_str = driver.get('details', {}).get('monthly_hours', '174:00')
+                # Convert "174:00" format to decimal hours
+                if ':' in monthly_hours_str:
+                    hours, minutes = monthly_hours_str.split(':')
+                    monthly_hours = float(hours) + float(minutes) / 60.0
+                else:
+                    monthly_hours = float(monthly_hours_str)
+                
+                driver_info[driver['driver_id']] = {
+                    'name': driver['name'],
+                    'monthly_hours': monthly_hours,
+                    'type': driver.get('details', {}).get('type', 'full_time')
+                }
+            
+            # Group routes by date and parse duration
+            routes_by_date = {}
+            for route in self.routes:
+                date = route['date']
+                if date not in routes_by_date:
+                    routes_by_date[date] = []
+                
+                # Parse duration "11:00" to decimal hours
+                duration_str = route.get('details', {}).get('duration', '8:00')
+                if ':' in duration_str:
+                    hours, minutes = duration_str.split(':')
+                    duration = float(hours) + float(minutes) / 60.0
+                else:
+                    duration = float(duration_str)
+                
+                routes_by_date[date].append({
+                    'route_id': len(routes_by_date[date]),  # Sequential ID for this date
+                    'route_name': route['route_name'],
+                    'duration': duration,
+                    'day_of_week': route.get('day_of_week', 'unknown')
+                })
+            
+            # Create availability lookup
+            availability_map = {}
+            for avail in self.availability:
+                date = avail['date']
+                driver_id = avail['driver_id']
+                
+                if date not in availability_map:
+                    availability_map[date] = {}
+                
+                availability_map[date][driver_id] = {
+                    'available': avail.get('available', False),
+                    'available_hours': float(avail.get('available_hours', 0)),
+                    'max_routes': int(avail.get('max_routes', 0)),
+                    'shift_preference': avail.get('shift_preference', 'any')
+                }
+            
+            return {
+                'driver_info': driver_info,
+                'routes_by_date': routes_by_date,
+                'availability_map': availability_map,
+                'dates': sorted(routes_by_date.keys())
+            }
+            
+        except Exception as e:
+            print(f"Error parsing input data: {e}")
+            return None
+    
+    def _build_optimization_model(self, data: Dict):
+        """Build the OR-Tools optimization model"""
+        
+        driver_info = data['driver_info']
+        routes_by_date = data['routes_by_date']
+        availability_map = data['availability_map']
+        dates = data['dates']
+        
+        # Decision variables: x[driver_id][date][route_id] = 1 if assigned
+        x = {}
+        for driver_id in driver_info:
+            x[driver_id] = {}
+            for date in dates:
+                x[driver_id][date] = {}
+                if date in routes_by_date:
+                    for route in routes_by_date[date]:
+                        route_id = route['route_id']
+                        x[driver_id][date][route_id] = self.solver.BoolVar(
+                            f'x_{driver_id}_{date}_{route_id}'
+                        )
+        
+        # Store variables for solution extraction
+        self.decision_vars = x
+        self.parsed_data = data
+        
+        # Constraint 1: Each route must be assigned to exactly one driver
+        for date in dates:
+            if date in routes_by_date:
+                for route in routes_by_date[date]:
+                    route_id = route['route_id']
+                    constraint = self.solver.Constraint(1, 1)
+                    for driver_id in driver_info:
+                        if driver_id in x and date in x[driver_id] and route_id in x[driver_id][date]:
+                            constraint.SetCoefficient(x[driver_id][date][route_id], 1)
+        
+        # Constraint 2: Driver availability constraints
+        for driver_id in driver_info:
+            for date in dates:
+                if date in availability_map and driver_id in availability_map[date]:
+                    avail = availability_map[date][driver_id]
+                    
+                    if not avail['available']:
+                        # Driver not available - cannot be assigned any route
+                        for route_id in x[driver_id].get(date, {}):
+                            constraint = self.solver.Constraint(0, 0)
+                            constraint.SetCoefficient(x[driver_id][date][route_id], 1)
+                    else:
+                        # Max routes constraint
+                        if avail['max_routes'] > 0:
+                            constraint = self.solver.Constraint(0, avail['max_routes'])
+                            for route_id in x[driver_id].get(date, {}):
+                                constraint.SetCoefficient(x[driver_id][date][route_id], 1)
+                        
+                        # Daily hours constraint
+                        if avail['available_hours'] > 0 and date in routes_by_date:
+                            constraint = self.solver.Constraint(0, avail['available_hours'])
+                            for route in routes_by_date[date]:
+                                route_id = route['route_id']
+                                if route_id in x[driver_id].get(date, {}):
+                                    constraint.SetCoefficient(
+                                        x[driver_id][date][route_id], 
+                                        route['duration']
+                                    )
+        
+        # Constraint 3: Monthly hours constraint (simplified - assumes even distribution)
+        weekly_limit_factor = 1.2  # Allow 20% over weekly average for optimization
+        for driver_id in driver_info:
+            monthly_hours = driver_info[driver_id]['monthly_hours']
+            weekly_hours_limit = (monthly_hours / 4.33) * weekly_limit_factor  # Approximate weekly limit
+            
+            constraint = self.solver.Constraint(0, weekly_hours_limit)
+            for date in dates:
+                if date in routes_by_date:
+                    for route in routes_by_date[date]:
+                        route_id = route['route_id']
+                        if driver_id in x and date in x[driver_id] and route_id in x[driver_id][date]:
+                            constraint.SetCoefficient(
+                                x[driver_id][date][route_id], 
+                                route['duration']
+                            )
+        
+        # Special Constraint: Saturday route 452SA priority for Klagenfurt - Samstagsfahrer
+        saturday_driver_id = None
+        for driver_id, info in driver_info.items():
+            if 'Klagenfurt - Samstagsfahrer' in info['name']:
+                saturday_driver_id = driver_id
+                break
+        
+        if saturday_driver_id:
+            for date in dates:
+                # Check if it's Saturday and has route 452SA
+                if date in routes_by_date:
+                    route_452SA = None
+                    for route in routes_by_date[date]:
+                        if route['route_name'] == '452SA':
+                            route_452SA = route
+                            break
+                    
+                    if route_452SA and saturday_driver_id in availability_map.get(date, {}):
+                        if availability_map[date][saturday_driver_id]['available']:
+                            # Force assignment of 452SA to Saturday driver if available
+                            route_id = route_452SA['route_id']
+                            if (saturday_driver_id in x and date in x[saturday_driver_id] 
+                                and route_id in x[saturday_driver_id][date]):
+                                constraint = self.solver.Constraint(1, 1)
+                                constraint.SetCoefficient(x[saturday_driver_id][date][route_id], 1)
+        
+        # Objective: Maximize assignment preference based on remaining hours
+        objective = self.solver.Objective()
+        
+        for driver_id in driver_info:
+            monthly_hours = driver_info[driver_id]['monthly_hours']
+            # Higher monthly hours = higher priority (weight)
+            weight = monthly_hours / 100.0  # Normalize weights
+            
+            for date in dates:
+                if date in routes_by_date:
+                    for route in routes_by_date[date]:
+                        route_id = route['route_id']
+                        if driver_id in x and date in x[driver_id] and route_id in x[driver_id][date]:
+                            # Bonus for assigning to drivers with more hours
+                            objective.SetCoefficient(x[driver_id][date][route_id], weight)
+        
+        objective.SetMaximization()
+    
+    def _extract_solution(self, data: Dict) -> Dict:
+        """Extract the optimal solution from the solver"""
+        
+        driver_info = data['driver_info']
+        routes_by_date = data['routes_by_date']
+        dates = data['dates']
+        x = self.decision_vars
+        
+        detailed_assignments = {}
+        unassigned_routes = []
+        statistics = {
+            'total_assignments': 0,
+            'unassigned_routes': 0,
+            'total_hours_assigned': 0.0,
+            'driver_workload': {}
+        }
+        
+        # Extract assignments
+        for date in dates:
+            detailed_assignments[date] = {}
+            if date in routes_by_date:
+                for route in routes_by_date[date]:
+                    route_id = route['route_id']
+                    route_name = route['route_name']
+                    route_duration = route['duration']
+                    assigned = False
+                    
+                    for driver_id in driver_info:
+                        if (driver_id in x and date in x[driver_id] 
+                            and route_id in x[driver_id][date]
+                            and x[driver_id][date][route_id].solution_value() > 0.5):
+                            
+                            driver_name = driver_info[driver_id]['name']
+                            
+                            # Detailed format with all info
+                            detailed_assignments[date][route_name] = {
+                                'driver_name': driver_name,
+                                'driver_id': driver_id,
+                                'duration_hours': route_duration,
+                                'duration_formatted': f"{int(route_duration)}:{int((route_duration % 1) * 60):02d}"
+                            }
+                            
+                            statistics['total_assignments'] += 1
+                            statistics['total_hours_assigned'] += route_duration
+                            assigned = True
+                            
+                            # Track driver workload
+                            if driver_id not in statistics['driver_workload']:
+                                statistics['driver_workload'][driver_id] = {
+                                    'name': driver_name,
+                                    'assignments': 0,
+                                    'total_hours': 0.0
+                                }
+                            statistics['driver_workload'][driver_id]['assignments'] += 1
+                            statistics['driver_workload'][driver_id]['total_hours'] += route_duration
+                            break
+                    
+                    if not assigned:
+                        statistics['unassigned_routes'] += 1
+                        unassigned_routes.append({
+                            'date': date,
+                            'route_name': route_name,
+                            'duration_hours': route_duration,
+                            'duration_formatted': f"{int(route_duration)}:{int((route_duration % 1) * 60):02d}"
+                        })
+        
+        return {
+            'assignments': detailed_assignments,  # Format: {date: {route_name: {driver_name, driver_id, duration}}}
+            'unassigned_routes': unassigned_routes,
+            'statistics': statistics,
+            'solver_status': 'OPTIMAL' if self.solver.Objective().Value() else 'FEASIBLE',
+            'objective_value': self.solver.Objective().Value()
+        }
+
+# Example usage function
+def optimize_driver_schedule(drivers_data: List[Dict], routes_data: List[Dict], 
+                           availability_data: List[Dict]) -> Dict:
+    """
+    Convenience function to run the optimization
+    
+    Example input format:
+    
+    drivers_data = [
+        {
+            'driver_id': 1,
+            'name': 'Blaskovic, Nenad',
+            'details': {'monthly_hours': '174:00', 'type': 'full_time'}
+        },
+        ...
+    ]
+    
+    routes_data = [
+        {
+            'date': '2025-07-07',
+            'route_name': '431oS',
+            'details': {'duration': '11:00'},
+            'day_of_week': 'monday'
+        },
+        ...
+    ]
+    
+    availability_data = [
+        {
+            'driver_id': 1,
+            'date': '2025-07-07',
+            'available': True,
+            'available_hours': 8.0,
+            'max_routes': 2
+        },
+        ...
+    ]
+    """
+    
+    optimizer = DriverRouteOptimizer()
+    return optimizer.optimize_assignments(drivers_data, routes_data, availability_data)
+
+# Test example (comment out in production)
+if __name__ == "__main__":
+    # Example test data
+    test_drivers = [
+        {'driver_id': 1, 'name': 'Blaskovic, Nenad', 'details': {'monthly_hours': '174:00', 'type': 'full_time'}},
+        {'driver_id': 21, 'name': 'Klagenfurt - Samstagsfahrer', 'details': {'monthly_hours': '40:00', 'type': 'saturday_only'}},
+    ]
+    
+    test_routes = [
+        {'date': '2025-07-12', 'route_name': '452SA', 'details': {'duration': '8:00'}, 'day_of_week': 'saturday'},
+        {'date': '2025-07-12', 'route_name': '451SA', 'details': {'duration': '8:00'}, 'day_of_week': 'saturday'},
+    ]
+    
+    test_availability = [
+        {'driver_id': 1, 'date': '2025-07-12', 'available': True, 'available_hours': 8.0, 'max_routes': 2},
+        {'driver_id': 21, 'date': '2025-07-12', 'available': True, 'available_hours': 8.0, 'max_routes': 1},
+    ]
+    
+    result = optimize_driver_schedule(test_drivers, test_routes, test_availability)
+    print("Optimization Result:")
+    print(json.dumps(result, indent=2))
+    
+    # Example of clean output display
+    print("\n=== SCHEDULE ===")
+    for date, assignments in result.get('assignments', {}).items():
+        print(f"\n📅 {date}:")
+        for route, details in assignments.items():
+            print(f"  Route {route} ({details['duration_formatted']}h) → {details['driver_name']}")
+    
+    if result.get('unassigned_routes'):
+        print(f"\n⚠️ Unassigned routes: {len(result['unassigned_routes'])}")
+        for unassigned in result['unassigned_routes']:
+            print(f"  {unassigned['route_name']} ({unassigned['duration_formatted']}h) on {unassigned['date']}")
