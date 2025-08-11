@@ -122,27 +122,35 @@ async def optimize_schedule_advanced(
         assignments = result.get('assignments', {})
         
         for date_str, date_assignments in assignments.items():
-            # Check if date_assignments is a list or dict
-            if isinstance(date_assignments, str):
-                logger.error(f"Found string for date_assignments: {date_assignments}")
-                continue
-            elif isinstance(date_assignments, list):
-                for assignment in date_assignments:
-                    if isinstance(assignment, str):
-                        logger.error(f"Found string assignment: {assignment}")
-                        continue
+            # New optimizer returns dict format: route_name -> assignment_details
+            if isinstance(date_assignments, dict):
+                for route_name, assignment_details in date_assignments.items():
                     legacy_assignments.append({
-                        "driver": assignment.get('driver_name', ''),
-                        "driver_id": assignment.get('driver_id', 0),
-                        "route": assignment.get('route_name', ''),
-                        "route_id": assignment.get('original_route_id', 0),
+                        "driver": assignment_details.get('driver_name', ''),
+                        "driver_id": assignment_details.get('driver_id', 0),
+                        "route": route_name,
+                        "route_id": assignment_details.get('route_id', 0),
                         "date": date_str,
-                        "hour": f"{assignment.get('duration_hours', 8.0):.1f}:00",
+                        "hour": f"{assignment_details.get('duration_hours', 8.0):.1f}:00",
                         "remaining_hour": "16:00",
                         "status": "assigned"
                     })
+            elif isinstance(date_assignments, list):
+                # Handle legacy list format
+                for assignment in date_assignments:
+                    if isinstance(assignment, dict):
+                        legacy_assignments.append({
+                            "driver": assignment.get('driver_name', ''),
+                            "driver_id": assignment.get('driver_id', 0),
+                            "route": assignment.get('route_name', ''),
+                            "route_id": assignment.get('route_id', 0),
+                            "date": date_str,
+                            "hour": f"{assignment.get('duration_hours', 8.0):.1f}:00",
+                            "remaining_hour": "16:00",
+                            "status": "assigned"
+                        })
             else:
-                logger.error(f"Unexpected date_assignments type: {type(date_assignments)}, value: {date_assignments}")
+                logger.error(f"Unexpected date_assignments type: {type(date_assignments)}")
         
         # Skip database save to avoid conflicts - focus on Google Sheets export
         logger.info(f"Generated {len(legacy_assignments)} assignments for Google Sheets export")
@@ -158,11 +166,12 @@ async def optimize_schedule_advanced(
             result['google_sheets_export'] = {"success": False, "error": str(e)}
         
         # Extract Saturday assignments for verification
-        saturday_assignments = result['assignments'].get('2025-07-12', [])
+        saturday_assignments = result['assignments'].get('2025-07-12', {})
+        saturday_count = len(saturday_assignments) if isinstance(saturday_assignments, dict) else len(saturday_assignments)
         
         return SuccessResponse(
             status="success",
-            message=f"Advanced OR-Tools optimization completed and posted to Google Sheets. Saturday has {len(saturday_assignments)} routes assigned.",
+            message=f"Advanced OR-Tools optimization completed and posted to Google Sheets. Saturday has {saturday_count} routes assigned.",
             data={
                 "assignments": result['assignments'],
                 "saturday_assignments": saturday_assignments,

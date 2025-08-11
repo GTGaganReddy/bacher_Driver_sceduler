@@ -53,15 +53,10 @@ class DriverRouteOptimizer:
                            availability_data: List[Dict]) -> Dict:
         """
         Run OR-Tools optimization for driver-route assignment
-        Handles exact database format:
-        - drivers: driver_id, name, details (JSON string with monthly_hours)
-        - routes: route_id, date, route_name, details (JSON string with duration), day_of_week
-        - availability: driver_id, date, available (bool), available_hours (Decimal), max_routes
         
-        Constraints:
-        1) Only one driver per route per day
-        2) Optimize available hours - assign routes to drivers with most remaining hours
-        3) Saturday route 252SA must always be assigned to "Klagenfurt - Samstagsfahrer"
+        Fixed Issues:
+        1. Added constraint to prevent multiple routes per driver per day
+        2. Fixed objective to prioritize drivers with most remaining available hours
         """
         try:
             # Create the solver
@@ -77,7 +72,7 @@ class DriverRouteOptimizer:
                 
                 # Parse JSON details field
                 details = parse_json_details(driver.get('details', ''))
-                monthly_hours_str = details.get('monthly_hours', '174:00')
+                monthly_hours_str = details.get('monthly_hours', '160:00')
                 monthly_hours = parse_time_string_to_hours(monthly_hours_str)
                 
                 driver_info[driver_id] = {
@@ -88,6 +83,8 @@ class DriverRouteOptimizer:
             
             # Parse routes from database format
             route_info = {}
+            routes_by_date = {}  # New: Group routes by date for same-day constraint
+            
             for route in routes_data:
                 route_id = route.get('route_id') or route.get('id')
                 route_name = route.get('route_name') or route.get('name', 'Unknown Route')
@@ -99,16 +96,25 @@ class DriverRouteOptimizer:
                 duration_str = details.get('duration', '8:00')
                 duration_hours = parse_time_string_to_hours(duration_str)
                 
+                # Extract route code from details as backup
+                route_code = details.get('route_code', route_name)
+                
                 route_info[route_id] = {
                     'name': route_name,
+                    'route_code': route_code,
                     'date': route_date,
                     'duration_hours': duration_hours,
                     'day_of_week': day_of_week,
                     'route_type': details.get('type', 'unknown')
                 }
+                
+                # Group routes by date for same-day constraint
+                if route_date not in routes_by_date:
+                    routes_by_date[route_date] = []
+                routes_by_date[route_date].append(route_id)
             
             # Parse availability from database format
-            driver_availability = {}  # driver_id -> date -> availability_info
+            driver_availability = {}
             for avail in availability_data:
                 driver_id = avail.get('driver_id')
                 date_str = str(avail.get('date', ''))
@@ -116,7 +122,7 @@ class DriverRouteOptimizer:
                 
                 # Convert Decimal to float
                 available_hours = avail.get('available_hours', 8.0)
-                if hasattr(available_hours, '__float__'):  # Handle Decimal type
+                if hasattr(available_hours, '__float__'):
                     available_hours = float(available_hours)
                 elif isinstance(available_hours, str):
                     available_hours = parse_time_string_to_hours(available_hours)
@@ -146,7 +152,6 @@ class DriverRouteOptimizer:
                 route_name = route_data['name']
                 day_of_week = route_data['day_of_week']
                 
-                # Check if this is the Saturday 252SA route
                 if route_name == '252SA' and day_of_week == 'saturday':
                     saturday_252sa_route_id = route_id
                     logger.info(f"Found Saturday route 252SA: route_id={route_id}, date={route_data['date']}")
@@ -175,7 +180,25 @@ class DriverRouteOptimizer:
                 if constraint_vars:
                     solver.Add(sum(constraint_vars) <= 1)
             
-            # Constraint 2: Driver cannot exceed monthly available hours
+            # NEW CONSTRAINT 2: Each driver can only be assigned ONE route per day
+            for driver_id in driver_info.keys():
+                for date_str, route_ids_on_date in routes_by_date.items():
+                    # Check if driver is available on this date
+                    if (driver_id in driver_availability and 
+                        date_str in driver_availability[driver_id] and 
+                        driver_availability[driver_id][date_str]['available']):
+                        
+                        # Get all variables for this driver on this date
+                        same_day_vars = []
+                        for route_id in route_ids_on_date:
+                            if (driver_id, route_id) in x:
+                                same_day_vars.append(x[driver_id, route_id])
+                        
+                        # Constraint: sum of assignments for this driver on this day <= 1
+                        if same_day_vars:
+                            solver.Add(sum(same_day_vars) <= 1)
+            
+            # Constraint 3: Driver cannot exceed monthly available hours
             for driver_id, driver_data in driver_info.items():
                 monthly_hours = driver_data['monthly_hours']
                 constraint_vars = []
@@ -189,7 +212,7 @@ class DriverRouteOptimizer:
                 if constraint_vars:
                     solver.Add(sum(var * hours for var, hours in zip(constraint_vars, route_hours)) <= monthly_hours)
             
-            # Constraint 3: Saturday route 252SA must be assigned to Klagenfurt - Samstagsfahrer
+            # Constraint 4: Saturday route 252SA must be assigned to Klagenfurt - Samstagsfahrer
             if klagenfurt_driver_id and saturday_252sa_route_id:
                 if (klagenfurt_driver_id, saturday_252sa_route_id) in x:
                     solver.Add(x[klagenfurt_driver_id, saturday_252sa_route_id] == 1)
@@ -197,23 +220,34 @@ class DriverRouteOptimizer:
                 else:
                     logger.warning("Cannot assign 252SA to Klagenfurt - Samstagsfahrer (driver not available)")
             
-            # Objective: Prioritize drivers with more remaining hours + maximize assignments
+            # FIXED OBJECTIVE: Prioritize drivers with most remaining available hours
             objective_terms = []
             
+            # Pre-calculate current remaining hours for each driver based on their daily availability
+            driver_remaining_hours = {}
             for driver_id, driver_data in driver_info.items():
-                monthly_hours = driver_data['monthly_hours']
+                total_available_hours = 0
                 
+                # Sum up available hours across all days they're available
+                if driver_id in driver_availability:
+                    for date_str, avail_data in driver_availability[driver_id].items():
+                        if avail_data['available']:
+                            total_available_hours += avail_data['available_hours']
+                
+                driver_remaining_hours[driver_id] = total_available_hours
+            
+            # Create objective that prioritizes drivers with more remaining hours
+            for driver_id, remaining_hours in driver_remaining_hours.items():
                 for route_id, route_data in route_info.items():
                     if (driver_id, route_id) in x:
-                        route_hours = route_data['duration_hours']
+                        # Weight based on driver's remaining available hours
+                        # Higher remaining hours = higher priority
+                        hours_weight = remaining_hours * 10  # Scale up for better differentiation
                         
-                        # Weight based on remaining hours after this assignment
-                        remaining_hours_weight = monthly_hours / 200.0  # Normalize weight
+                        # Base weight for making assignments (to maximize total assignments)
+                        assignment_weight = 100
                         
-                        # Base weight for assignment (to maximize total assignments)
-                        assignment_weight = 100.0
-                        
-                        total_weight = assignment_weight + remaining_hours_weight
+                        total_weight = assignment_weight + hours_weight
                         objective_terms.append(x[driver_id, route_id] * total_weight)
             
             solver.Maximize(sum(objective_terms))
@@ -238,28 +272,26 @@ class DriverRouteOptimizer:
                             route_name = route_data['name']
                             
                             if date_str not in assignments:
-                                assignments[date_str] = []
+                                assignments[date_str] = {}
                             
                             duration_hours = route_data['duration_hours']
                             duration_formatted = f"{int(duration_hours)}:{int((duration_hours % 1) * 60):02d}"
                             
-                            assignments[date_str].append({
+                            assignments[date_str][route_name] = {
                                 'driver_name': driver_info[driver_id]['name'],
                                 'driver_id': driver_id,
-                                'route_name': route_name,
                                 'route_id': route_id,
                                 'duration_hours': duration_hours,
-                                'duration_formatted': duration_formatted,
-                                'original_route_id': route_id
-                            })
+                                'duration_formatted': duration_formatted
+                            }
                             total_assignments += 1
                             driver_hours_used[driver_id] += duration_hours
                 
                 # Find unassigned routes
                 assigned_route_ids = set()
                 for date_assignments in assignments.values():
-                    for assignment in date_assignments:
-                        assigned_route_ids.add(assignment['route_id'])
+                    for route_assignment in date_assignments.values():
+                        assigned_route_ids.add(route_assignment['route_id'])
                 
                 for route_id, route_data in route_info.items():
                     if route_id not in assigned_route_ids:
@@ -270,18 +302,21 @@ class DriverRouteOptimizer:
                             'duration_hours': route_data['duration_hours']
                         })
                 
-                # Calculate driver utilization
+                # Calculate driver utilization based on available hours vs assigned hours
                 driver_utilization = {}
                 for driver_id, driver_data in driver_info.items():
-                    monthly_hours = driver_data['monthly_hours']
+                    # Calculate total available hours for this driver
+                    total_available_hours = driver_remaining_hours.get(driver_id, 0)
                     hours_used = driver_hours_used.get(driver_id, 0)
-                    utilization_rate = (hours_used / monthly_hours * 100) if monthly_hours > 0 else 0
+                    
+                    # Use available hours as the base for utilization calculation
+                    utilization_rate = (hours_used / total_available_hours * 100) if total_available_hours > 0 else 0
                     
                     driver_utilization[driver_id] = {
                         'name': driver_data['name'],
-                        'monthly_available_hours': monthly_hours,
+                        'weekly_available_hours': total_available_hours,
                         'hours_used': hours_used,
-                        'hours_remaining': monthly_hours - hours_used,
+                        'hours_remaining': total_available_hours - hours_used,
                         'utilization_rate': round(utilization_rate, 2)
                     }
                 
@@ -289,9 +324,9 @@ class DriverRouteOptimizer:
                 special_assignment_status = "Not found"
                 if klagenfurt_driver_id and saturday_252sa_route_id:
                     for date_assignments in assignments.values():
-                        for assignment in date_assignments:
-                            if (assignment['driver_id'] == klagenfurt_driver_id and 
-                                assignment['route_id'] == saturday_252sa_route_id):
+                        for route_assignment in date_assignments.values():
+                            if (route_assignment['driver_id'] == klagenfurt_driver_id and 
+                                route_assignment['route_id'] == saturday_252sa_route_id):
                                 special_assignment_status = "Successfully assigned"
                                 break
                 
