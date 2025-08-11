@@ -13,8 +13,9 @@ class DatabaseManager:
     async def init_pool(self):
         """Initialize connection pool - fallback to local for development when Supabase IPv6 unavailable"""
         try:
-            # Use Replit's PostgreSQL database since IPv6 Supabase connection not available
-            database_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+            # Use Supabase session pooler connection to access authentic July 7-13, 2025 data
+            supabase_pooler_url = f"postgresql://postgres.nqwyglxhvhlrviknykmt:{settings.SUPABASE_PASSWORD}@aws-0-eu-north-1.pooler.supabase.com:5432/postgres"
+            database_url = supabase_pooler_url
             
             self.pool = await asyncpg.create_pool(
                 database_url,
@@ -23,8 +24,8 @@ class DatabaseManager:
                 command_timeout=60
             )
             await self.create_tables()
-            await self.insert_july_2025_data()  # Load authentic July 7-13, 2025 data structure
-            logger.info("Database pool initialized with local PostgreSQL for development")
+            # Skip inserting test data - we'll use the authentic data from your Supabase
+            logger.info("Connected to Supabase via session pooler - using authentic July 7-13, 2025 data")
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
             raise

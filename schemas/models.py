@@ -40,7 +40,7 @@ class Route(BaseModel):
     route_id: int
     date: date
     route_name: str
-    details: Optional[Dict[str, Any]] = {}
+    details: Optional[Any] = {}  # Support both dict and string from JSONB
 
 # Scheduling Models
 class WeekUpdate(BaseModel):

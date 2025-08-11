@@ -1,18 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException
 from datetime import date, timedelta
 from services.database import DatabaseService
-from services.optimizer import SchedulingOptimizer, DriverRouteOptimizer, optimize_driver_schedule
+from services.simple_optimizer import optimize_driver_schedule
 from services.google_sheets import GoogleSheetsService
 from schemas.models import WeekUpdate, SuccessResponse, GoogleSheetsPayload
-from api.dependencies import get_database_service, get_scheduling_optimizer, get_google_sheets_service
+from api.dependencies import get_database_service, get_google_sheets_service
 
 router = APIRouter()
 
 @router.post("/schedule/optimize", response_model=SuccessResponse)
 async def optimize_schedule(
     week_data: WeekUpdate,
-    db_service: DatabaseService = Depends(get_database_service),
-    optimizer: SchedulingOptimizer = Depends(get_scheduling_optimizer)
+    db_service: DatabaseService = Depends(get_database_service)
 ):
     """Optimize driver-route assignments for a week"""
     try:
@@ -24,8 +23,9 @@ async def optimize_schedule(
         routes = await db_service.get_routes_by_date_range(week_start, week_end)
         availability = await db_service.get_availability_by_date_range(week_start, week_end)
         
-        # Run optimization
-        assignments = optimizer.optimize_assignments(drivers, routes, availability, week_start)
+        # Run optimization using Supabase data
+        result = optimize_driver_schedule(drivers, routes, availability)
+        assignments = result.get('assignments', {})
         
         # Save assignments to database
         await db_service.save_assignments(week_start, assignments)
@@ -93,7 +93,7 @@ async def optimize_schedule_advanced(
         routes = await db_service.get_routes_by_date_range(week_start, week_end)
         availability = await db_service.get_availability_by_date_range(week_start, week_end)
         
-        # Run advanced optimization
+        # Run optimization using your authentic July 7-13, 2025 Supabase data
         result = optimize_driver_schedule(drivers, routes, availability)
         
         if 'error' in result:
