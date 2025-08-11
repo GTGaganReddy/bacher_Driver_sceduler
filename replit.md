@@ -8,13 +8,14 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
-## August 11, 2025 - Enhanced Optimizer Algorithm Integration
-- Integrated user's improved optimizer algorithm with enhanced error handling and statistics
-- Added new endpoints: `/schedule/reoptimize` and `/schedule/{week_start}/stats`  
-- Implemented helper functions for legacy format conversion and comprehensive statistics
-- Maintained automatic Google Sheets export via Google Cloud Function
-- System successfully processes authentic July 7-13, 2025 data with 100% success rate
-- Both Saturday routes (451SA, 452SA) correctly assigned to "Klagenfurt - Samstagsfahrer"
+## August 11, 2025 - Updated Optimizer to Handle Exact Database Format
+- Replaced optimizer with user's improved algorithm that handles exact database format
+- Added proper parsing of JSON string details fields from database
+- Implemented Decimal-to-float conversion for available_hours
+- Added time string parsing (11:00 -> 11.0 hours) for route durations
+- Maintained pure OR-Tools algorithm with no fallback mechanisms as required
+- System processes 21 drivers, 42 routes (8 per weekday + 2 Saturday), 147 availability records
+- Automatic Google Sheets export via Google Cloud Function continues working
 
 # System Architecture
 

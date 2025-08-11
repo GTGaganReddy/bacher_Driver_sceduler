@@ -1,0 +1,617 @@
+from fastapi import APIRouter, Depends, HTTPException
+from datetime import date, timedelta
+from typing import Dict, List, Any, Optional
+from services.database import DatabaseService
+from services.google_sheets import GoogleSheetsService
+from schemas.models import WeekUpdate, SuccessResponse, GoogleSheetsPayload
+from api.dependencies import get_database_service, get_google_sheets_service
+from ortools.linear_solver import pywraplp
+import logging
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/v1", tags=["scheduler"])
+
+@router.post("/schedule/optimize", response_model=SuccessResponse)
+async def optimize_schedule(
+    week_data: WeekUpdate,
+    db_service: DatabaseService = Depends(get_database_service)
+):
+    """Optimize driver-route assignments using OR-Tools directly"""
+    try:
+        week_start = week_data.week_start
+        week_end = week_start + timedelta(days=6)
+        
+        logger.info(f"Starting optimization for week: {week_start} to {week_end}")
+        
+        # Fetch data from Supabase
+        drivers = await db_service.get_drivers()
+        routes = await db_service.get_routes_by_date_range(week_start, week_end)
+        availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        
+        # Validate data
+        if not drivers:
+            raise HTTPException(status_code=400, detail="No drivers found")
+        if not routes:
+            raise HTTPException(status_code=400, detail="No routes found for the specified week")
+        if not availability:
+            raise HTTPException(status_code=400, detail="No availability data found for the specified week")
+        
+        logger.info(f"Loaded {len(drivers)} drivers, {len(routes)} routes, {len(availability)} availability records")
+        
+        # Run OR-Tools optimization
+        result = run_ortools_optimization(drivers, routes, availability)
+        
+        if 'error' in result:
+            raise HTTPException(status_code=500, detail=f"Optimization failed: {result['error']}")
+        
+        assignments = result.get('assignments', {})
+        
+        # Convert to legacy format for database storage
+        legacy_assignments = convert_to_legacy_format(assignments)
+        
+        # Save to database
+        await db_service.save_assignments(week_start, legacy_assignments)
+        
+        logger.info(f"Optimization completed. {result.get('statistics', {}).get('total_assignments', 0)} routes assigned")
+        
+        return SuccessResponse(
+            status="success",
+            message="Schedule optimized successfully using OR-Tools",
+            data={
+                "assignments": assignments,
+                "statistics": result.get('statistics', {}),
+                "unassigned_routes": result.get('unassigned_routes', []),
+                "solver_status": result.get('solver_status', 'UNKNOWN'),
+                "week_start": week_start.isoformat(),
+                "week_end": week_end.isoformat()
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Optimization error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Optimization failed: {str(e)}")
+
+@router.get("/schedule/{week_start}", response_model=SuccessResponse)
+async def get_schedule(
+    week_start: date,
+    db_service: DatabaseService = Depends(get_database_service)
+):
+    """Get schedule for a specific week"""
+    try:
+        logger.info(f"Retrieving schedule for week: {week_start}")
+        
+        # Get both legacy and new format assignments
+        legacy_assignments = await db_service.get_assignments(week_start)
+        
+        if legacy_assignments:
+            # Convert legacy format to detailed format if needed
+            detailed_assignments = convert_from_legacy_format(legacy_assignments)
+            
+            return SuccessResponse(
+                status="success",
+                message="Schedule retrieved successfully",
+                data={
+                    "assignments": detailed_assignments,
+                    "legacy_assignments": legacy_assignments,
+                    "week_start": week_start.isoformat()
+                }
+            )
+        else:
+            return SuccessResponse(
+                status="success",
+                message="No schedule found for this week",
+                data={
+                    "assignments": {},
+                    "week_start": week_start.isoformat()
+                }
+            )
+    except Exception as e:
+        logger.error(f"Error retrieving schedule: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve schedule: {str(e)}")
+
+@router.post("/schedule/export", response_model=SuccessResponse)
+async def export_to_google_sheets(
+    payload: GoogleSheetsPayload,
+    sheets_service: GoogleSheetsService = Depends(get_google_sheets_service)
+):
+    """Export schedule to Google Sheets"""
+    try:
+        logger.info("Starting Google Sheets export")
+        
+        if not payload.drivers:
+            raise HTTPException(status_code=400, detail="No driver data provided for export")
+        
+        result = await sheets_service.update_sheet(payload.drivers)
+        
+        logger.info("Google Sheets export completed successfully")
+        
+        return SuccessResponse(
+            status="success",
+            message="Schedule exported to Google Sheets successfully",
+            data=result
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Google Sheets export error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to export schedule: {str(e)}")
+
+@router.post("/schedule/reoptimize", response_model=SuccessResponse)
+async def reoptimize_schedule(
+    week_data: WeekUpdate,
+    db_service: DatabaseService = Depends(get_database_service)
+):
+    """Re-optimize an existing schedule with updated constraints"""
+    try:
+        week_start = week_data.week_start
+        week_end = week_start + timedelta(days=6)
+        
+        logger.info(f"Re-optimizing schedule for week: {week_start}")
+        
+        # Check if schedule already exists
+        existing_assignments = await db_service.get_assignments(week_start)
+        
+        # Fetch fresh data
+        drivers = await db_service.get_drivers()
+        routes = await db_service.get_routes_by_date_range(week_start, week_end)
+        availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        
+        # Run optimization
+        result = run_ortools_optimization(drivers, routes, availability)
+        
+        if 'error' in result:
+            raise HTTPException(status_code=500, detail=f"Re-optimization failed: {result['error']}")
+        
+        assignments = result.get('assignments', {})
+        legacy_assignments = convert_to_legacy_format(assignments)
+        
+        # Save updated assignments
+        await db_service.save_assignments(week_start, legacy_assignments)
+        
+        return SuccessResponse(
+            status="success",
+            message="Schedule re-optimized successfully",
+            data={
+                "assignments": assignments,
+                "statistics": result.get('statistics', {}),
+                "unassigned_routes": result.get('unassigned_routes', []),
+                "solver_status": result.get('solver_status', 'UNKNOWN'),
+                "had_existing_schedule": bool(existing_assignments)
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Re-optimization error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Re-optimization failed: {str(e)}")
+
+@router.get("/schedule/{week_start}/stats", response_model=SuccessResponse)
+async def get_schedule_statistics(
+    week_start: date,
+    db_service: DatabaseService = Depends(get_database_service)
+):
+    """Get detailed statistics for a week's schedule"""
+    try:
+        logger.info(f"Getting statistics for week: {week_start}")
+        
+        week_end = week_start + timedelta(days=6)
+        
+        # Get data
+        drivers = await db_service.get_drivers()
+        routes = await db_service.get_routes_by_date_range(week_start, week_end)
+        assignments = await db_service.get_assignments(week_start)
+        
+        # Calculate statistics
+        stats = calculate_schedule_stats(drivers, routes, assignments)
+        
+        return SuccessResponse(
+            status="success",
+            message="Statistics retrieved successfully",
+            data=stats
+        )
+    except Exception as e:
+        logger.error(f"Error getting statistics: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get statistics: {str(e)}")
+
+# OR-Tools Optimization Function
+
+def parse_time_string_to_hours(time_str: str) -> float:
+    """Convert time string like '11:00' or '174:00' to hours as float"""
+    if not time_str or not isinstance(time_str, str):
+        return 8.0  # Default fallback
+    
+    try:
+        parts = time_str.split(':')
+        if len(parts) == 2:
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            return hours + (minutes / 60.0)
+    except (ValueError, IndexError):
+        pass
+    
+    return 8.0  # Default fallback
+
+def parse_json_details(details_str: str) -> Dict:
+    """Parse JSON string from database details field"""
+    if not details_str:
+        return {}
+    
+    try:
+        import json
+        return json.loads(details_str)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+def run_ortools_optimization(drivers: List[Dict], routes: List[Dict], availability: List[Dict]) -> Dict:
+    """
+    Run OR-Tools optimization for driver-route assignment
+    Handles exact database format:
+    - drivers: driver_id, name, details (JSON string with monthly_hours)
+    - routes: route_id, date, route_name, details (JSON string with duration), day_of_week
+    - availability: driver_id, date, available (bool), available_hours (Decimal), max_routes
+    
+    Constraints:
+    1) Only one driver per route per day
+    2) Optimize available hours - assign routes to drivers with most remaining hours
+    3) Saturday route 252SA must always be assigned to "Klagenfurt - Samstagsfahrer"
+    """
+    try:
+        # Create the solver
+        solver = pywraplp.Solver.CreateSolver('SCIP')
+        if not solver:
+            return {'error': 'Failed to create OR-Tools solver'}
+        
+        # Parse drivers from database format
+        driver_info = {}
+        for driver in drivers:
+            driver_id = driver.get('driver_id') or driver.get('id')
+            driver_name = driver.get('name', 'Unknown Driver')
+            
+            # Parse JSON details field
+            details = parse_json_details(driver.get('details', ''))
+            monthly_hours_str = details.get('monthly_hours', '160:00')
+            monthly_hours = parse_time_string_to_hours(monthly_hours_str)
+            
+            driver_info[driver_id] = {
+                'name': driver_name,
+                'monthly_hours': monthly_hours,
+                'type': details.get('type', 'unknown')
+            }
+        
+        # Parse routes from database format
+        route_info = {}
+        for route in routes:
+            route_id = route.get('route_id') or route.get('id')
+            route_name = route.get('route_name') or route.get('name', 'Unknown Route')
+            route_date = str(route.get('date', ''))
+            day_of_week = route.get('day_of_week', 'unknown')
+            
+            # Parse JSON details field
+            details = parse_json_details(route.get('details', ''))
+            duration_str = details.get('duration', '8:00')
+            duration_hours = parse_time_string_to_hours(duration_str)
+            
+            # Extract route code from details as backup (should match route_name)
+            route_code = details.get('route_code', route_name)
+            
+            route_info[route_id] = {
+                'name': route_name,        # Primary route number like '431oS', '252SA'
+                'route_code': route_code,  # Backup route code from JSON details
+                'date': route_date,
+                'duration_hours': duration_hours,
+                'day_of_week': day_of_week,
+                'route_type': details.get('type', 'unknown')
+            }
+        
+        # Parse availability from database format
+        driver_availability = {}  # driver_id -> date -> availability_info
+        for avail in availability:
+            driver_id = avail.get('driver_id')
+            date_str = str(avail.get('date', ''))
+            is_available = avail.get('available', False)
+            
+            # Convert Decimal to float
+            available_hours = avail.get('available_hours', 8.0)
+            if hasattr(available_hours, '__float__'):  # Handle Decimal type
+                available_hours = float(available_hours)
+            elif isinstance(available_hours, str):
+                available_hours = parse_time_string_to_hours(available_hours)
+            
+            if driver_id not in driver_availability:
+                driver_availability[driver_id] = {}
+            
+            driver_availability[driver_id][date_str] = {
+                'available': is_available,
+                'available_hours': available_hours,
+                'max_routes': avail.get('max_routes', 1),
+                'shift_preference': avail.get('shift_preference', 'any')
+            }
+        
+        # Find special assignments
+        klagenfurt_driver_id = None
+        saturday_252sa_route_id = None
+        
+        # Find "Klagenfurt - Samstagsfahrer" driver
+        for driver_id, driver_data in driver_info.items():
+            if driver_data['name'] == "Klagenfurt - Samstagsfahrer":
+                klagenfurt_driver_id = driver_id
+                break
+        
+        # Find Saturday route 252SA
+        for route_id, route_data in route_info.items():
+            route_name = route_data['name']  # This contains the route number like '431oS', '252SA'
+            day_of_week = route_data['day_of_week']
+            
+            # Check if this is the Saturday 252SA route
+            if route_name == '252SA' and day_of_week == 'saturday':
+                saturday_252sa_route_id = route_id
+                logger.info(f"Found Saturday route 252SA: route_id={route_id}, date={route_data['date']}")
+                break
+        
+        # Create decision variables: x[driver_id, route_id] = 1 if driver assigned to route
+        x = {}
+        for driver_id in driver_info.keys():
+            for route_id, route_data in route_info.items():
+                route_date = route_data['date']
+                
+                # Only create variable if driver is available on route date
+                if (driver_id in driver_availability and 
+                    route_date in driver_availability[driver_id] and 
+                    driver_availability[driver_id][route_date]['available']):
+                    
+                    x[driver_id, route_id] = solver.IntVar(0, 1, f'x_{driver_id}_{route_id}')
+        
+        # Constraint 1: Each route assigned to exactly one driver (or none if no one available)
+        for route_id in route_info.keys():
+            constraint_vars = []
+            for driver_id in driver_info.keys():
+                if (driver_id, route_id) in x:
+                    constraint_vars.append(x[driver_id, route_id])
+            
+            if constraint_vars:
+                solver.Add(sum(constraint_vars) <= 1)
+        
+        # Constraint 2: Driver cannot exceed monthly available hours
+        for driver_id, driver_data in driver_info.items():
+            monthly_hours = driver_data['monthly_hours']
+            constraint_vars = []
+            route_hours = []
+            
+            for route_id, route_data in route_info.items():
+                if (driver_id, route_id) in x:
+                    constraint_vars.append(x[driver_id, route_id])
+                    route_hours.append(route_data['duration_hours'])
+            
+            if constraint_vars:
+                solver.Add(sum(var * hours for var, hours in zip(constraint_vars, route_hours)) <= monthly_hours)
+        
+        # Constraint 3: Saturday route 252SA must be assigned to Klagenfurt - Samstagsfahrer
+        if klagenfurt_driver_id and saturday_252sa_route_id:
+            if (klagenfurt_driver_id, saturday_252sa_route_id) in x:
+                solver.Add(x[klagenfurt_driver_id, saturday_252sa_route_id] == 1)
+                logger.info("Added constraint: Saturday route 252SA assigned to Klagenfurt - Samstagsfahrer")
+            else:
+                logger.warning("Cannot assign 252SA to Klagenfurt - Samstagsfahrer (driver not available)")
+        
+        # Objective: Prioritize drivers with more remaining hours + maximize assignments
+        objective_terms = []
+        
+        for driver_id, driver_data in driver_info.items():
+            monthly_hours = driver_data['monthly_hours']
+            
+            for route_id, route_data in route_info.items():
+                if (driver_id, route_id) in x:
+                    route_hours = route_data['duration_hours']
+                    
+                    # Weight based on remaining hours after this assignment
+                    # Higher weight for drivers with more remaining hours
+                    remaining_hours_weight = monthly_hours / 200.0  # Normalize weight
+                    
+                    # Base weight for assignment (to maximize total assignments)
+                    assignment_weight = 100.0
+                    
+                    total_weight = assignment_weight + remaining_hours_weight
+                    objective_terms.append(x[driver_id, route_id] * total_weight)
+        
+        solver.Maximize(sum(objective_terms))
+        
+        # Solve the problem
+        logger.info("Starting OR-Tools solver...")
+        status = solver.Solve()
+        
+        # Process results
+        if status == pywraplp.Solver.OPTIMAL or status == pywraplp.Solver.FEASIBLE:
+            assignments = {}
+            unassigned_routes = []
+            total_assignments = 0
+            driver_hours_used = {}
+            
+            # Extract assignments
+            for driver_id in driver_info.keys():
+                driver_hours_used[driver_id] = 0
+                for route_id, route_data in route_info.items():
+                    if (driver_id, route_id) in x and x[driver_id, route_id].solution_value() == 1:
+                        date_str = route_data['date']
+                        route_name = route_data['name']
+                        
+                        if date_str not in assignments:
+                            assignments[date_str] = {}
+                        
+                        duration_hours = route_data['duration_hours']
+                        duration_formatted = f"{int(duration_hours)}:{int((duration_hours % 1) * 60):02d}"
+                        
+                        assignments[date_str][route_name] = {
+                            'driver_name': driver_info[driver_id]['name'],
+                            'driver_id': driver_id,
+                            'route_id': route_id,
+                            'duration_hours': duration_hours,
+                            'duration_formatted': duration_formatted
+                        }
+                        total_assignments += 1
+                        driver_hours_used[driver_id] += duration_hours
+            
+            # Find unassigned routes
+            assigned_route_ids = set()
+            for date_assignments in assignments.values():
+                for route_assignment in date_assignments.values():
+                    assigned_route_ids.add(route_assignment['route_id'])
+            
+            for route_id, route_data in route_info.items():
+                if route_id not in assigned_route_ids:
+                    unassigned_routes.append({
+                        'id': route_id,
+                        'name': route_data['name'],
+                        'date': route_data['date'],
+                        'duration_hours': route_data['duration_hours']
+                    })
+            
+            # Calculate driver utilization
+            driver_utilization = {}
+            for driver_id, driver_data in driver_info.items():
+                monthly_hours = driver_data['monthly_hours']
+                hours_used = driver_hours_used.get(driver_id, 0)
+                utilization_rate = (hours_used / monthly_hours * 100) if monthly_hours > 0 else 0
+                
+                driver_utilization[driver_id] = {
+                    'name': driver_data['name'],
+                    'monthly_available_hours': monthly_hours,
+                    'hours_used': hours_used,
+                    'hours_remaining': monthly_hours - hours_used,
+                    'utilization_rate': round(utilization_rate, 2)
+                }
+            
+            # Verify special assignment
+            special_assignment_status = "Not found"
+            if klagenfurt_driver_id and saturday_252sa_route_id:
+                for date_assignments in assignments.values():
+                    for route_name, assignment_details in date_assignments.items():
+                        if (assignment_details['driver_id'] == klagenfurt_driver_id and 
+                            assignment_details['route_id'] == saturday_252sa_route_id):
+                            special_assignment_status = "Successfully assigned"
+                            break
+            
+            # Calculate statistics
+            statistics = {
+                'total_assignments': total_assignments,
+                'total_routes': len(route_info),
+                'unassigned_count': len(unassigned_routes),
+                'assignment_rate': round((total_assignments / len(route_info)) * 100, 2) if route_info else 0,
+                'objective_value': solver.Objective().Value(),
+                'solve_time_ms': solver.WallTime(),
+                'driver_utilization': driver_utilization,
+                'special_assignment_252sa': special_assignment_status
+            }
+            
+            solver_status = 'OPTIMAL' if status == pywraplp.Solver.OPTIMAL else 'FEASIBLE'
+            
+            logger.info(f"Optimization completed: {total_assignments}/{len(route_info)} routes assigned")
+            logger.info(f"Saturday 252SA assignment: {special_assignment_status}")
+            
+            return {
+                'assignments': assignments,
+                'unassigned_routes': unassigned_routes,
+                'statistics': statistics,
+                'solver_status': solver_status
+            }
+        
+        else:
+            error_msg = f"Solver failed with status: {status}"
+            logger.error(error_msg)
+            return {'error': error_msg}
+    
+    except Exception as e:
+        logger.error(f"OR-Tools optimization error: {str(e)}", exc_info=True)
+        return {'error': f"Optimization failed: {str(e)}"}
+
+# Helper Functions
+
+def convert_to_legacy_format(detailed_assignments: Dict[str, Dict[str, Dict]]) -> List[Dict]:
+    """Convert detailed assignments to legacy format for database storage"""
+    legacy_assignments = []
+    
+    for date_str, date_assignments in detailed_assignments.items():
+        for route_name, assignment_details in date_assignments.items():
+            legacy_assignments.append({
+                "driver": assignment_details['driver_name'],
+                "driver_id": assignment_details['driver_id'], 
+                "route": route_name,
+                "route_id": assignment_details.get('route_id', 0),
+                "date": date_str,
+                "duration_hours": assignment_details['duration_hours'],
+                "duration_formatted": assignment_details['duration_formatted'],
+                "status": "assigned"
+            })
+    
+    return legacy_assignments
+
+def convert_from_legacy_format(legacy_assignments: List[Dict]) -> Dict[str, Dict[str, Dict]]:
+    """Convert legacy assignments to detailed format"""
+    detailed_assignments = {}
+    
+    for assignment in legacy_assignments:
+        date_str = assignment['date']
+        route_name = assignment['route']
+        
+        if date_str not in detailed_assignments:
+            detailed_assignments[date_str] = {}
+        
+        detailed_assignments[date_str][route_name] = {
+            'driver_name': assignment['driver'],
+            'driver_id': assignment['driver_id'],
+            'route_id': assignment.get('route_id', 0),
+            'duration_hours': assignment.get('duration_hours', 8.0),
+            'duration_formatted': assignment.get('duration_formatted', '8:00')
+        }
+    
+    return detailed_assignments
+
+def calculate_schedule_stats(drivers: List[Dict], routes: List[Dict], assignments: List[Dict]) -> Dict[str, Any]:
+    """Calculate comprehensive schedule statistics"""
+    if not assignments:
+        return {
+            "total_drivers": len(drivers),
+            "total_routes": len(routes),
+            "assigned_routes": 0,
+            "unassigned_routes": len(routes),
+            "utilization_rate": 0.0,
+            "driver_workload": {},
+            "total_hours_assigned": 0
+        }
+    
+    # Calculate driver workload
+    driver_workload = {}
+    total_hours_assigned = 0
+    
+    for assignment in assignments:
+        driver_id = assignment['driver_id']
+        driver_name = assignment['driver']
+        hours = assignment.get('duration_hours', 8.0)
+        
+        if driver_id not in driver_workload:
+            driver_workload[driver_id] = {
+                'name': driver_name,
+                'routes_assigned': 0,
+                'total_hours_assigned': 0.0
+            }
+        
+        driver_workload[driver_id]['routes_assigned'] += 1
+        driver_workload[driver_id]['total_hours_assigned'] += hours
+        total_hours_assigned += hours
+    
+    assigned_routes = len(assignments)
+    total_routes = len(routes)
+    utilization_rate = (assigned_routes / total_routes * 100) if total_routes > 0 else 0
+    
+    return {
+        "total_drivers": len(drivers),
+        "active_drivers": len(driver_workload),
+        "total_routes": total_routes,
+        "assigned_routes": assigned_routes,
+        "unassigned_routes": total_routes - assigned_routes,
+        "utilization_rate": round(utilization_rate, 2),
+        "total_hours_assigned": total_hours_assigned,
+        "average_hours_per_driver": round(total_hours_assigned / len(driver_workload), 2) if driver_workload else 0,
+        "driver_workload": driver_workload
+    }
