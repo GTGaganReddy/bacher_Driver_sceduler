@@ -1,0 +1,305 @@
+from fastapi import APIRouter, Depends, HTTPException
+from datetime import date, timedelta
+from typing import Dict, List, Any, Optional
+from services.database import DatabaseService
+from services.simple_optimizer import optimize_driver_schedule  # Your OR-Tools optimizer
+from services.google_sheets import GoogleSheetsService
+from schemas.models import WeekUpdate, SuccessResponse, GoogleSheetsPayload
+from api.dependencies import get_database_service, get_google_sheets_service
+import logging
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/v1", tags=["scheduler"])
+
+@router.post("/schedule/optimize", response_model=SuccessResponse)
+async def optimize_schedule(
+    week_data: WeekUpdate,
+    db_service: DatabaseService = Depends(get_database_service)
+):
+    """Basic optimization for driver-route assignments using OR-Tools"""
+    try:
+        week_start = week_data.week_start
+        week_end = week_start + timedelta(days=6)
+        
+        logger.info(f"Starting optimization for week: {week_start} to {week_end}")
+        
+        # Fetch data from Supabase
+        drivers = await db_service.get_drivers()
+        routes = await db_service.get_routes_by_date_range(week_start, week_end)
+        availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        
+        # Validate data
+        if not drivers:
+            raise HTTPException(status_code=400, detail="No drivers found")
+        if not routes:
+            raise HTTPException(status_code=400, detail="No routes found for the specified week")
+        if not availability:
+            raise HTTPException(status_code=400, detail="No availability data found for the specified week")
+        
+        logger.info(f"Loaded {len(drivers)} drivers, {len(routes)} routes, {len(availability)} availability records")
+        
+        # Run OR-Tools optimization
+        result = optimize_driver_schedule(drivers, routes, availability)
+        
+        if 'error' in result:
+            raise HTTPException(status_code=500, detail=f"Optimization failed: {result['error']}")
+        
+        assignments = result.get('assignments', {})
+        
+        # Convert to legacy format for database storage
+        legacy_assignments = convert_to_legacy_format(assignments)
+        
+        # Save to database
+        await db_service.save_assignments(week_start, legacy_assignments)
+        
+        logger.info(f"Optimization completed. {result.get('statistics', {}).get('total_assignments', 0)} routes assigned")
+        
+        return SuccessResponse(
+            status="success",
+            message="Schedule optimized successfully using OR-Tools",
+            data={
+                "assignments": assignments,  # New detailed format
+                "statistics": result.get('statistics', {}),
+                "unassigned_routes": result.get('unassigned_routes', []),
+                "solver_status": result.get('solver_status', 'UNKNOWN'),
+                "week_start": week_start.isoformat(),
+                "week_end": week_end.isoformat()
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Optimization error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Optimization failed: {str(e)}")
+
+@router.get("/schedule/{week_start}", response_model=SuccessResponse)
+async def get_schedule(
+    week_start: date,
+    db_service: DatabaseService = Depends(get_database_service)
+):
+    """Get schedule for a specific week"""
+    try:
+        logger.info(f"Retrieving schedule for week: {week_start}")
+        
+        # Get both legacy and new format assignments
+        legacy_assignments = await db_service.get_assignments(week_start)
+        
+        if legacy_assignments:
+            # Convert legacy format to detailed format if needed
+            detailed_assignments = convert_from_legacy_format(legacy_assignments)
+            
+            return SuccessResponse(
+                status="success",
+                message="Schedule retrieved successfully",
+                data={
+                    "assignments": detailed_assignments,
+                    "legacy_assignments": legacy_assignments,
+                    "week_start": week_start.isoformat()
+                }
+            )
+        else:
+            return SuccessResponse(
+                status="success",
+                message="No schedule found for this week",
+                data={
+                    "assignments": {},
+                    "week_start": week_start.isoformat()
+                }
+            )
+    except Exception as e:
+        logger.error(f"Error retrieving schedule: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve schedule: {str(e)}")
+
+@router.post("/schedule/export", response_model=SuccessResponse)
+async def export_to_google_sheets(
+    payload: GoogleSheetsPayload,
+    sheets_service: GoogleSheetsService = Depends(get_google_sheets_service)
+):
+    """Export schedule to Google Sheets"""
+    try:
+        logger.info("Starting Google Sheets export")
+        
+        if not payload.drivers:
+            raise HTTPException(status_code=400, detail="No driver data provided for export")
+        
+        result = await sheets_service.update_sheet(payload.drivers)
+        
+        logger.info("Google Sheets export completed successfully")
+        
+        return SuccessResponse(
+            status="success",
+            message="Schedule exported to Google Sheets successfully",
+            data=result
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Google Sheets export error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to export schedule: {str(e)}")
+
+@router.post("/schedule/reoptimize", response_model=SuccessResponse)
+async def reoptimize_schedule(
+    week_data: WeekUpdate,
+    db_service: DatabaseService = Depends(get_database_service)
+):
+    """Re-optimize an existing schedule with updated constraints"""
+    try:
+        week_start = week_data.week_start
+        week_end = week_start + timedelta(days=6)
+        
+        logger.info(f"Re-optimizing schedule for week: {week_start}")
+        
+        # Check if schedule already exists
+        existing_assignments = await db_service.get_assignments(week_start)
+        
+        # Fetch fresh data
+        drivers = await db_service.get_drivers()
+        routes = await db_service.get_routes_by_date_range(week_start, week_end)
+        availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        
+        # Run optimization
+        result = optimize_driver_schedule(drivers, routes, availability)
+        
+        if 'error' in result:
+            raise HTTPException(status_code=500, detail=f"Re-optimization failed: {result['error']}")
+        
+        assignments = result.get('assignments', {})
+        legacy_assignments = convert_to_legacy_format(assignments)
+        
+        # Save updated assignments
+        await db_service.save_assignments(week_start, legacy_assignments)
+        
+        return SuccessResponse(
+            status="success",
+            message="Schedule re-optimized successfully",
+            data={
+                "assignments": assignments,
+                "statistics": result.get('statistics', {}),
+                "unassigned_routes": result.get('unassigned_routes', []),
+                "solver_status": result.get('solver_status', 'UNKNOWN'),
+                "had_existing_schedule": bool(existing_assignments)
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Re-optimization error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Re-optimization failed: {str(e)}")
+
+@router.get("/schedule/{week_start}/stats", response_model=SuccessResponse)
+async def get_schedule_statistics(
+    week_start: date,
+    db_service: DatabaseService = Depends(get_database_service)
+):
+    """Get detailed statistics for a week's schedule"""
+    try:
+        logger.info(f"Getting statistics for week: {week_start}")
+        
+        week_end = week_start + timedelta(days=6)
+        
+        # Get data
+        drivers = await db_service.get_drivers()
+        routes = await db_service.get_routes_by_date_range(week_start, week_end)
+        assignments = await db_service.get_assignments(week_start)
+        
+        # Calculate statistics
+        stats = calculate_schedule_stats(drivers, routes, assignments)
+        
+        return SuccessResponse(
+            status="success",
+            message="Statistics retrieved successfully",
+            data=stats
+        )
+    except Exception as e:
+        logger.error(f"Error getting statistics: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get statistics: {str(e)}")
+
+# Helper Functions
+
+def convert_to_legacy_format(detailed_assignments: Dict[str, Dict[str, Dict]]) -> List[Dict]:
+    """Convert detailed assignments to legacy format for database storage"""
+    legacy_assignments = []
+    
+    for date_str, date_assignments in detailed_assignments.items():
+        for route_name, assignment_details in date_assignments.items():
+            legacy_assignments.append({
+                "driver": assignment_details['driver_name'],
+                "driver_id": assignment_details['driver_id'], 
+                "route": route_name,
+                "route_id": assignment_details.get('route_id', 0),
+                "date": date_str,
+                "duration_hours": assignment_details['duration_hours'],
+                "duration_formatted": assignment_details['duration_formatted'],
+                "status": "assigned"
+            })
+    
+    return legacy_assignments
+
+def convert_from_legacy_format(legacy_assignments: List[Dict]) -> Dict[str, Dict[str, Dict]]:
+    """Convert legacy assignments to detailed format"""
+    detailed_assignments = {}
+    
+    for assignment in legacy_assignments:
+        date_str = assignment['date']
+        route_name = assignment['route']
+        
+        if date_str not in detailed_assignments:
+            detailed_assignments[date_str] = {}
+        
+        detailed_assignments[date_str][route_name] = {
+            'driver_name': assignment['driver'],
+            'driver_id': assignment['driver_id'],
+            'duration_hours': assignment.get('duration_hours', 8.0),
+            'duration_formatted': assignment.get('duration_formatted', '8:00')
+        }
+    
+    return detailed_assignments
+
+def calculate_schedule_stats(drivers: List[Dict], routes: List[Dict], assignments: List[Dict]) -> Dict[str, Any]:
+    """Calculate comprehensive schedule statistics"""
+    if not assignments:
+        return {
+            "total_drivers": len(drivers),
+            "total_routes": len(routes),
+            "assigned_routes": 0,
+            "unassigned_routes": len(routes),
+            "utilization_rate": 0.0,
+            "driver_workload": {}
+        }
+    
+    # Calculate driver workload
+    driver_workload = {}
+    total_hours = 0
+    
+    for assignment in assignments:
+        driver_id = assignment['driver_id']
+        driver_name = assignment['driver']
+        hours = assignment.get('duration_hours', 8.0)
+        
+        if driver_id not in driver_workload:
+            driver_workload[driver_id] = {
+                'name': driver_name,
+                'routes': 0,
+                'total_hours': 0.0
+            }
+        
+        driver_workload[driver_id]['routes'] += 1
+        driver_workload[driver_id]['total_hours'] += hours
+        total_hours += hours
+    
+    assigned_routes = len(assignments)
+    total_routes = len(routes)
+    utilization_rate = (assigned_routes / total_routes * 100) if total_routes > 0 else 0
+    
+    return {
+        "total_drivers": len(drivers),
+        "active_drivers": len(driver_workload),
+        "total_routes": total_routes,
+        "assigned_routes": assigned_routes,
+        "unassigned_routes": total_routes - assigned_routes,
+        "utilization_rate": round(utilization_rate, 2),
+        "total_hours_assigned": total_hours,
+        "average_hours_per_driver": round(total_hours / len(driver_workload), 2) if driver_workload else 0,
+        "driver_workload": driver_workload
+    }

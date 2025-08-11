@@ -134,14 +134,17 @@ async def optimize_schedule_advanced(
             logger.warning(f"Google Sheets export failed: {e}")
             result['google_sheets_export'] = {"success": False, "error": str(e)}
         
+        # Extract Saturday assignments for verification
+        saturday_assignments = result['assignments'].get('2025-07-12', [])
+        
         return SuccessResponse(
             status="success",
-            message="Advanced OR-Tools optimization completed and posted to Google Sheets",
+            message=f"Advanced OR-Tools optimization completed and posted to Google Sheets. Saturday has {len(saturday_assignments)} routes assigned.",
             data={
                 "assignments": result['assignments'],
+                "saturday_assignments": saturday_assignments,
                 "statistics": result['statistics'],
                 "google_sheets_export": result.get('google_sheets_export', {}),
-                "legacy_assignments": legacy_assignments,
                 "success_rate": result.get('success_rate', 0)
             }
         )
