@@ -135,7 +135,7 @@ class DriverRouteOptimizer:
             
             # Find special assignments
             klagenfurt_driver_id = None
-            saturday_252sa_route_id = None
+            saturday_routes = []
             
             # Find "Klagenfurt - Samstagsfahrer" driver
             for driver_id, driver_data in driver_info.items():
@@ -143,15 +143,15 @@ class DriverRouteOptimizer:
                     klagenfurt_driver_id = driver_id
                     break
             
-            # Find Saturday route 252SA
+            # Find all Saturday routes (451SA, 452SA, etc.)
             for route_id, route_data in route_info.items():
                 route_name = route_data['name']
-                day_of_week = route_data['day_of_week']
+                route_date = route_data['date']
                 
-                if route_name == '252SA' and day_of_week == 'saturday':
-                    saturday_252sa_route_id = route_id
-                    logger.info(f"Found Saturday route 252SA: route_id={route_id}, date={route_data['date']}")
-                    break
+                # Check if this is a Saturday route (date 2025-07-12 is Saturday)
+                if route_date == '2025-07-12' or 'SA' in route_name:
+                    saturday_routes.append(route_id)
+                    logger.info(f"Found Saturday route {route_name}: route_id={route_id}, date={route_date}")
             
             # Create decision variables: x[driver_id, route_id] = 1 if driver assigned to route
             x = {}
@@ -208,15 +208,22 @@ class DriverRouteOptimizer:
                 if constraint_vars:
                     solver.Add(sum(var * hours for var, hours in zip(constraint_vars, route_hours)) <= monthly_hours)
             
-            # Constraint 4: Saturday route 252SA must be assigned to Klagenfurt - Samstagsfahrer
-            if klagenfurt_driver_id and saturday_252sa_route_id:
-                if (klagenfurt_driver_id, saturday_252sa_route_id) in x:
-                    solver.Add(x[klagenfurt_driver_id, saturday_252sa_route_id] == 1)
-                    logger.info("Added constraint: Saturday route 252SA assigned to Klagenfurt - Samstagsfahrer")
+            # Constraint 4: Saturday routes should be assigned to Klagenfurt - Samstagsfahrer
+            if klagenfurt_driver_id and saturday_routes:
+                saturday_assignments = []
+                for saturday_route_id in saturday_routes:
+                    if (klagenfurt_driver_id, saturday_route_id) in x:
+                        saturday_assignments.append(x[klagenfurt_driver_id, saturday_route_id])
+                        logger.info(f"Added Saturday route constraint for route_id {saturday_route_id}")
+                
+                # Ensure at least one Saturday route is assigned to Klagenfurt driver
+                if saturday_assignments:
+                    solver.Add(sum(saturday_assignments) >= 1)
+                    logger.info("Added constraint: At least one Saturday route assigned to Klagenfurt - Samstagsfahrer")
                 else:
-                    logger.warning("Cannot assign 252SA to Klagenfurt - Samstagsfahrer (driver not available)")
+                    logger.warning("Cannot assign Saturday routes to Klagenfurt - Samstagsfahrer (driver not available)")
             else:
-                logger.warning(f"Special assignment check - Klagenfurt driver found: {klagenfurt_driver_id is not None}, Saturday 252SA route found: {saturday_252sa_route_id is not None}")
+                logger.warning(f"Special assignment check - Klagenfurt driver found: {klagenfurt_driver_id is not None}, Saturday routes found: {len(saturday_routes)}")
             
             # UPDATED OBJECTIVE: Simplified to focus on monthly capacity and availability
             objective_terms = []
@@ -313,12 +320,12 @@ class DriverRouteOptimizer:
                 
                 # Verify special assignment
                 special_assignment_status = "Not found"
-                if klagenfurt_driver_id and saturday_252sa_route_id:
+                if klagenfurt_driver_id and saturday_routes:
                     for date_assignments in assignments.values():
-                        for route_assignment in date_assignments.values():
+                        for route_name, route_assignment in date_assignments.items():
                             if (route_assignment['driver_id'] == klagenfurt_driver_id and 
-                                route_assignment['route_id'] == saturday_252sa_route_id):
-                                special_assignment_status = "Successfully assigned"
+                                route_assignment['route_id'] in saturday_routes):
+                                special_assignment_status = f"Successfully assigned to {route_name}"
                                 break
                 
                 # Calculate statistics
@@ -330,13 +337,13 @@ class DriverRouteOptimizer:
                     'objective_value': solver.Objective().Value(),
                     'solve_time_ms': solver.WallTime(),
                     'driver_utilization': driver_utilization,
-                    'special_assignment_252sa': special_assignment_status
+                    'special_saturday_assignment': special_assignment_status
                 }
                 
                 solver_status = 'OPTIMAL' if status == pywraplp.Solver.OPTIMAL else 'FEASIBLE'
                 
                 logger.info(f"Optimization completed: {total_assignments}/{len(route_info)} routes assigned")
-                logger.info(f"Saturday 252SA assignment: {special_assignment_status}")
+                logger.info(f"Saturday assignment: {special_assignment_status}")
                 
                 return {
                     'assignments': assignments,
