@@ -379,6 +379,16 @@ def run_ortools_optimization(drivers: List[Dict], routes: List[Dict], availabili
         logger.info(f"Sequential optimization completed: {total_assignments}/{len(route_info)} routes assigned")
         logger.info(f"Saturday 452SA assignment: {special_assignment_status}")
         
+        # Debug: Log F entries being returned
+        f_entries_count = 0
+        for date_str, date_assignments in all_assignments.items():
+            for route_name, assignment_details in date_assignments.items():
+                if route_name.startswith('F_'):
+                    f_entries_count += 1
+        
+        if f_entries_count > 0:
+            logger.info(f"Optimizer returning {f_entries_count} F entries for unavailable drivers")
+        
         return {
             'assignments': all_assignments,
             'unassigned_routes': all_unassigned_routes,
