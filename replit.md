@@ -8,14 +8,14 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
-## August 11, 2025 - Enhanced OR-Tools Algorithm with Sequential Hour Reduction
-- Updated algorithm with sequential hour reduction constraint preventing over-assignment
-- Added cumulative hours tracking: each date ensures total hours up to that point ≤ monthly capacity
-- Corrected Saturday route from 252SA to 452SA as per user specification
-- Maintains monthly capacity focus with chronological hour constraint enforcement
-- Algorithm now enforces proper hour progression through the week
-- Pure OR-Tools SCIP solver with advanced constraint handling
-- System processes authentic Supabase database format with improved accuracy
+## August 11, 2025 - Advanced OR-Tools Algorithm with Progressive Hour Consumption
+- Updated algorithm with progressive hour consumption using running balance constraints
+- Running balance variables track remaining capacity after each chronological date
+- Balance constraint: remaining_after_date = remaining_before_date - hours_used_on_date
+- Prevents over-assignment through explicit non-negative remaining hours constraints
+- More sophisticated hour tracking than simple cumulative constraints
+- Maintains Saturday route 452SA assignment to Klagenfurt - Samstagsfahrer
+- Pure OR-Tools SCIP solver with advanced mathematical programming techniques
 
 # System Architecture
 

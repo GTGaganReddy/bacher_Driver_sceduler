@@ -208,8 +208,8 @@ class DriverRouteOptimizer:
                 if constraint_vars:
                     solver.Add(sum(var * hours for var, hours in zip(constraint_vars, route_hours)) <= monthly_hours)
             
-            # Constraint 4: Sequential hour reduction - cumulative hours constraint by date
-            # This ensures that as we progress through dates, the remaining capacity is properly tracked
+            # Constraint 4: Progressive hour consumption - running balance constraints
+            # This ensures that remaining capacity reduces as routes are assigned chronologically
             for driver_id, driver_data in driver_info.items():
                 monthly_hours = driver_data['monthly_hours']
                 
@@ -230,27 +230,47 @@ class DriverRouteOptimizer:
                 # Sort dates chronologically
                 driver_dates.sort(key=lambda x: x[0])
                 
-                # Create cumulative constraints for each date
-                for i, (_, current_date) in enumerate(driver_dates):
-                    # Get all route assignments up to and including current date
-                    cumulative_vars = []
-                    cumulative_hours = []
+                # Create running balance variables for remaining hours after each date
+                remaining_hours = {}
+                
+                # Initial remaining hours = monthly capacity
+                remaining_hours['start'] = solver.NumVar(0, monthly_hours, f'remaining_start_{driver_id}')
+                solver.Add(remaining_hours['start'] == monthly_hours)
+                
+                # For each date, create constraint: remaining_after_date = remaining_before_date - hours_used_on_date
+                prev_remaining = remaining_hours['start']
+                
+                for date_obj, current_date in driver_dates:
+                    # Calculate total hours used on this date
+                    date_hours_used = 0
+                    date_vars = []
+                    date_hours = []
                     
-                    for j in range(i + 1):  # Include current date and all previous dates
-                        _, check_date = driver_dates[j]
+                    if current_date in routes_by_date:
+                        for route_id in routes_by_date[current_date]:
+                            if (driver_id, route_id) in x:
+                                date_vars.append(x[driver_id, route_id])
+                                date_hours.append(route_info[route_id]['duration_hours'])
+                    
+                    if date_vars:
+                        # Hours used on this date
+                        hours_used_today = sum(var * hours for var, hours in zip(date_vars, date_hours))
                         
-                        # Find routes on this date for this driver
-                        if check_date in routes_by_date:
-                            for route_id in routes_by_date[check_date]:
-                                if (driver_id, route_id) in x:
-                                    cumulative_vars.append(x[driver_id, route_id])
-                                    cumulative_hours.append(route_info[route_id]['duration_hours'])
-                    
-                    # Add cumulative constraint: total hours up to current date <= monthly capacity
-                    if cumulative_vars:
-                        solver.Add(
-                            sum(var * hours for var, hours in zip(cumulative_vars, cumulative_hours)) <= monthly_hours
-                        )
+                        # Remaining hours after this date
+                        remaining_after = solver.NumVar(0, monthly_hours, f'remaining_after_{driver_id}_{current_date}')
+                        remaining_hours[current_date] = remaining_after
+                        
+                        # Balance constraint: remaining_after = remaining_before - hours_used_today
+                        solver.Add(remaining_after == prev_remaining - hours_used_today)
+                        
+                        # Remaining hours must be non-negative (this prevents over-assignment)
+                        solver.Add(remaining_after >= 0)
+                        
+                        # Update for next iteration
+                        prev_remaining = remaining_after
+                    else:
+                        # No routes on this date, remaining hours stay the same
+                        remaining_hours[current_date] = prev_remaining
             
             # Constraint 5: Saturday route 452SA must be assigned to Klagenfurt - Samstagsfahrer
             if klagenfurt_driver_id and saturday_252sa_route_id:
