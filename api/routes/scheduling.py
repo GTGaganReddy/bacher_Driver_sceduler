@@ -156,11 +156,20 @@ async def optimize_schedule_advanced(
         logger.info(f"Generated {len(legacy_assignments)} assignments for Google Sheets export")
         
         # Auto-export to your Google Cloud Function for Google Sheets update
+        # Send ALL drivers (including unassigned ones) to completely overwrite the sheet
         try:
             sheets_service = GoogleSheetsService()
-            export_result = await sheets_service.update_sheet(result)
+            
+            # Create list of all dates in the week
+            all_dates = []
+            for i in range(7):  # 7 days in a week
+                date_str = (week_start + timedelta(days=i)).strftime('%Y-%m-%d')
+                all_dates.append(date_str)
+            
+            # Pass all drivers and dates to ensure complete sheet overwrite
+            export_result = await sheets_service.update_sheet(result, all_drivers=drivers, all_dates=all_dates)
             result['google_sheets_export'] = export_result
-            logger.info(f"Successfully posted {len(legacy_assignments)} assignments to Google Sheets via GCF")
+            logger.info(f"Successfully posted complete driver grid to Google Sheets via GCF")
         except Exception as e:
             logger.warning(f"Google Sheets export failed: {e}")
             result['google_sheets_export'] = {"success": False, "error": str(e)}
