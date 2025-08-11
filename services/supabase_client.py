@@ -19,8 +19,12 @@ class SupabaseService:
         self.client: Client = None
         
         if self.url and self.key:
-            self.client = create_client(self.url, self.key)
-            logger.info("Supabase client initialized successfully")
+            try:
+                self.client = create_client(self.url, self.key)
+                logger.info("Supabase client initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize Supabase client: {e}")
+                self.client = None
         else:
             logger.warning("Supabase credentials not provided, client not initialized")
     

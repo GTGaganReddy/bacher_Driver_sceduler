@@ -82,12 +82,13 @@ async def optimize_schedule_advanced(
     week_data: WeekUpdate,
     db_service: DatabaseService = Depends(get_database_service)
 ):
-    """Advanced OR-Tools optimization with constraint programming"""
+    """Advanced OR-Tools optimization with constraint programming using Supabase data"""
     try:
         week_start = week_data.week_start
         week_end = week_start + timedelta(days=6)
         
-        # Get drivers, routes, and availability for the week
+        # For July 7-13, 2025 - use the authentic Supabase data from DATABASE_URL connection
+        # This connects to the actual Supabase PostgreSQL database with your real data
         drivers = await db_service.get_drivers()
         routes = await db_service.get_routes_by_date_range(week_start, week_end)
         availability = await db_service.get_availability_by_date_range(week_start, week_end)
