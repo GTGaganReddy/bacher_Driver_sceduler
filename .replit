@@ -22,9 +22,6 @@ args = "FastAPI Server"
 name = "FastAPI Server"
 author = "agent"
 
-[workflows.workflow.metadata]
-outputType = "webview"
-
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python main.py"
