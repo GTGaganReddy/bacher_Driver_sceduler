@@ -155,6 +155,29 @@ def run_ortools_optimization(drivers: List[Dict], routes: List[Dict], availabili
         total_assignments = 0
         driver_hours_used = {driver_id: 0 for driver_id in driver_info.keys()}
         
+        # Pre-populate assignments with "F" for unavailable drivers on each date
+        for date_obj, date_str in sorted_dates:
+            all_assignments[date_str] = {}
+            
+            # For each driver, check if they're unavailable on this date
+            for driver_id, driver_data in driver_info.items():
+                is_available = False
+                
+                if (driver_id in driver_availability and 
+                    date_str in driver_availability[driver_id]):
+                    is_available = driver_availability[driver_id][date_str]['available']
+                
+                # If driver is unavailable, assign "F" with 0 hours
+                if not is_available:
+                    all_assignments[date_str][f"F_{driver_id}"] = {
+                        'driver_name': driver_data['name'],
+                        'driver_id': driver_id,
+                        'route_id': None,
+                        'duration_hours': 0.0,
+                        'duration_formatted': "00:00",
+                        'status': 'unavailable'
+                    }
+        
         # SEQUENTIAL OPTIMIZATION: Process each date in chronological order
         for date_obj, current_date in sorted_dates:
             logger.info(f"Optimizing routes for date: {current_date}")
@@ -258,9 +281,7 @@ def run_ortools_optimization(drivers: List[Dict], routes: List[Dict], availabili
             
             # Process results for current date
             if status == pywraplp.Solver.OPTIMAL or status == pywraplp.Solver.FEASIBLE:
-                date_assignments = {}
-                
-                # Extract assignments for current date
+                # Extract assignments for current date (add to existing F assignments)
                 for driver_id in driver_info.keys():
                     for route_id in current_route_ids:
                         if (driver_id, route_id) in x and x[driver_id, route_id].solution_value() == 1:
@@ -269,12 +290,14 @@ def run_ortools_optimization(drivers: List[Dict], routes: List[Dict], availabili
                             duration_hours = route_data['duration_hours']
                             duration_formatted = f"{int(duration_hours)}:{int((duration_hours % 1) * 60):02d}"
                             
-                            date_assignments[route_name] = {
+                            # Add actual route assignment (overwrites any F assignment for this driver)
+                            all_assignments[current_date][route_name] = {
                                 'driver_name': driver_info[driver_id]['name'],
                                 'driver_id': driver_id,
                                 'route_id': route_id,
                                 'duration_hours': duration_hours,
-                                'duration_formatted': duration_formatted
+                                'duration_formatted': duration_formatted,
+                                'status': 'assigned'
                             }
                             
                             # CRITICAL: Update remaining hours for this driver
@@ -284,26 +307,26 @@ def run_ortools_optimization(drivers: List[Dict], routes: List[Dict], availabili
                             
                             logger.info(f"Assigned {route_name} to {driver_info[driver_id]['name']} ({duration_hours}h). Remaining: {driver_remaining_hours[driver_id]:.1f}h")
                 
-                # Store assignments for current date
-                if date_assignments:
-                    all_assignments[current_date] = date_assignments
-                
                 # Find unassigned routes for current date
-                assigned_route_ids = {details['route_id'] for details in date_assignments.values()}
+                assigned_route_names = {route_name for route_name, details in all_assignments[current_date].items() 
+                                      if not route_name.startswith('F_') and details.get('status') == 'assigned'}
+                
                 for route_id in current_route_ids:
-                    if route_id not in assigned_route_ids:
-                        route_data = route_info[route_id]
+                    route_data = route_info[route_id]
+                    route_name = route_data['name']
+                    
+                    if route_name not in assigned_route_names:
                         all_unassigned_routes.append({
                             'id': route_id,
-                            'name': route_data['name'],
+                            'name': route_name,
                             'date': route_data['date'],
                             'duration_hours': route_data['duration_hours']
                         })
-                        logger.warning(f"Route {route_data['name']} on {current_date} could not be assigned")
+                        logger.warning(f"Route {route_name} on {current_date} could not be assigned")
             
             else:
                 logger.error(f"Solver failed for date {current_date} with status: {status}")
-                # Add all routes for this date to unassigned
+                # Add all routes for this date to unassigned (F assignments remain)
                 for route_id in current_route_ids:
                     route_data = route_info[route_id]
                     all_unassigned_routes.append({
