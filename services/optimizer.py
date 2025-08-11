@@ -134,12 +134,37 @@ class DriverRouteOptimizer:
                 if avail_date not in availability_map:
                     availability_map[avail_date] = {}
                 
+                # Use reasonable defaults when fields don't exist in database
+                available_hours = 16.0  # Default 16 hours available per day
+                max_routes = 3         # Default max 3 routes per day
+                
+                if 'available_hours' in avail:
+                    available_hours = float(avail.get('available_hours', 16.0))
+                if 'max_routes' in avail:
+                    max_routes = int(avail.get('max_routes', 3))
+                
                 availability_map[avail_date][driver_id] = {
                     'available': avail.get('available', False),
-                    'available_hours': float(avail.get('available_hours', 0)),
-                    'max_routes': int(avail.get('max_routes', 0)),
+                    'available_hours': available_hours,
+                    'max_routes': max_routes,
                     'shift_preference': avail.get('shift_preference', 'any')
                 }
+            
+            # Debug logging
+            total_routes = sum(len(routes) for routes in routes_by_date.values())
+            available_drivers = sum(1 for date_map in availability_map.values() 
+                                   for driver_avail in date_map.values() 
+                                   if driver_avail['available'])
+            
+            logger.info(f"Parsed data: {len(driver_info)} drivers, {len(routes_by_date)} dates, {total_routes} routes")
+            logger.info(f"Available driver-days: {available_drivers}")
+            
+            # Sample availability data
+            if availability_map:
+                sample_date = list(availability_map.keys())[0]
+                sample_driver = list(availability_map[sample_date].keys())[0]
+                sample_avail = availability_map[sample_date][sample_driver]
+                logger.info(f"Sample availability: Driver {sample_driver} on {sample_date}: {sample_avail}")
             
             return {
                 'driver_info': driver_info,

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from datetime import date, timedelta
 from typing import Dict, List, Any, Optional
 from services.database import DatabaseService
-from services.simple_optimizer import optimize_driver_schedule  # Your OR-Tools optimizer
+from services.optimizer import DriverRouteOptimizer  # Your OR-Tools optimizer
 from services.google_sheets import GoogleSheetsService
 from schemas.models import WeekUpdate, SuccessResponse, GoogleSheetsPayload
 from api.dependencies import get_database_service
@@ -99,8 +99,9 @@ async def optimize_schedule_advanced(
         routes = await db_service.get_routes_by_date_range(week_start, week_end)
         availability = await db_service.get_availability_by_date_range(week_start, week_end)
         
-        # Run optimization using your authentic July 7-13, 2025 Supabase data
-        result = optimize_driver_schedule(drivers, routes, availability)
+        # Run optimization using your authentic July 7-13, 2025 Supabase data with the real OR-Tools optimizer
+        optimizer = DriverRouteOptimizer()
+        result = optimizer.optimize_assignments(drivers, routes, availability)
         
         if 'error' in result:
             raise HTTPException(status_code=500, detail=result['error'])
