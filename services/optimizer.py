@@ -143,14 +143,14 @@ class DriverRouteOptimizer:
                     klagenfurt_driver_id = driver_id
                     break
             
-            # Find Saturday route 252SA
+            # Find Saturday route 452SA
             for route_id, route_data in route_info.items():
                 route_name = route_data['name']
                 day_of_week = route_data['day_of_week']
                 
-                if route_name == '252SA' and day_of_week == 'saturday':
+                if route_name == '452SA' and day_of_week == 'saturday':
                     saturday_252sa_route_id = route_id
-                    logger.info(f"Found Saturday route 252SA: route_id={route_id}, date={route_data['date']}")
+                    logger.info(f"Found Saturday route 452SA: route_id={route_id}, date={route_data['date']}")
                     break
             
             # Create decision variables: x[driver_id, route_id] = 1 if driver assigned to route
@@ -208,15 +208,59 @@ class DriverRouteOptimizer:
                 if constraint_vars:
                     solver.Add(sum(var * hours for var, hours in zip(constraint_vars, route_hours)) <= monthly_hours)
             
-            # Constraint 4: Saturday route 252SA must be assigned to Klagenfurt - Samstagsfahrer
+            # Constraint 4: Sequential hour reduction - cumulative hours constraint by date
+            # This ensures that as we progress through dates, the remaining capacity is properly tracked
+            for driver_id, driver_data in driver_info.items():
+                monthly_hours = driver_data['monthly_hours']
+                
+                # Get all dates this driver is available, sorted chronologically
+                driver_dates = []
+                if driver_id in driver_availability:
+                    for date_str, avail_info in driver_availability[driver_id].items():
+                        if avail_info['available']:
+                            try:
+                                # Parse date string to ensure proper sorting
+                                from datetime import datetime
+                                date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                                driver_dates.append((date_obj, date_str))
+                            except ValueError:
+                                # If date parsing fails, use string sorting as fallback
+                                driver_dates.append((date_str, date_str))
+                
+                # Sort dates chronologically
+                driver_dates.sort(key=lambda x: x[0])
+                
+                # Create cumulative constraints for each date
+                for i, (_, current_date) in enumerate(driver_dates):
+                    # Get all route assignments up to and including current date
+                    cumulative_vars = []
+                    cumulative_hours = []
+                    
+                    for j in range(i + 1):  # Include current date and all previous dates
+                        _, check_date = driver_dates[j]
+                        
+                        # Find routes on this date for this driver
+                        if check_date in routes_by_date:
+                            for route_id in routes_by_date[check_date]:
+                                if (driver_id, route_id) in x:
+                                    cumulative_vars.append(x[driver_id, route_id])
+                                    cumulative_hours.append(route_info[route_id]['duration_hours'])
+                    
+                    # Add cumulative constraint: total hours up to current date <= monthly capacity
+                    if cumulative_vars:
+                        solver.Add(
+                            sum(var * hours for var, hours in zip(cumulative_vars, cumulative_hours)) <= monthly_hours
+                        )
+            
+            # Constraint 5: Saturday route 452SA must be assigned to Klagenfurt - Samstagsfahrer
             if klagenfurt_driver_id and saturday_252sa_route_id:
                 if (klagenfurt_driver_id, saturday_252sa_route_id) in x:
                     solver.Add(x[klagenfurt_driver_id, saturday_252sa_route_id] == 1)
-                    logger.info("Added constraint: Saturday route 252SA assigned to Klagenfurt - Samstagsfahrer")
+                    logger.info("Added constraint: Saturday route 452SA assigned to Klagenfurt - Samstagsfahrer")
                 else:
-                    logger.warning("Cannot assign 252SA to Klagenfurt - Samstagsfahrer (driver not available)")
+                    logger.warning("Cannot assign 452SA to Klagenfurt - Samstagsfahrer (driver not available)")
             else:
-                logger.warning(f"Special assignment check - Klagenfurt driver found: {klagenfurt_driver_id is not None}, Saturday 252SA route found: {saturday_252sa_route_id is not None}")
+                logger.warning(f"Special assignment check - Klagenfurt driver found: {klagenfurt_driver_id is not None}, Saturday 452SA route found: {saturday_252sa_route_id is not None}")
             
             # UPDATED OBJECTIVE: Simplified to focus on monthly capacity and availability
             objective_terms = []
@@ -330,13 +374,13 @@ class DriverRouteOptimizer:
                     'objective_value': solver.Objective().Value(),
                     'solve_time_ms': solver.WallTime(),
                     'driver_utilization': driver_utilization,
-                    'special_assignment_252sa': special_assignment_status
+                    'special_assignment_452sa': special_assignment_status
                 }
                 
                 solver_status = 'OPTIMAL' if status == pywraplp.Solver.OPTIMAL else 'FEASIBLE'
                 
                 logger.info(f"Optimization completed: {total_assignments}/{len(route_info)} routes assigned")
-                logger.info(f"Saturday 252SA assignment: {special_assignment_status}")
+                logger.info(f"Saturday 452SA assignment: {special_assignment_status}")
                 
                 return {
                     'assignments': assignments,

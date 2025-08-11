@@ -8,14 +8,14 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
-## August 11, 2025 - Simplified OR-Tools Algorithm for Monthly Capacity Focus
-- Updated algorithm with user's simplified version using monthly_hours from driver details directly
-- Removed complex daily capacity calculations for cleaner, more accurate optimization
-- Objective function weights: monthly capacity (higher = better) + available days (flexibility)
-- Maintains critical constraint: one route per driver per day
-- Algorithm prioritizes drivers with higher monthly capacity and more available days
-- Pure OR-Tools SCIP solver with no fallback mechanisms as required
-- System processes authentic Supabase database format efficiently
+## August 11, 2025 - Enhanced OR-Tools Algorithm with Sequential Hour Reduction
+- Updated algorithm with sequential hour reduction constraint preventing over-assignment
+- Added cumulative hours tracking: each date ensures total hours up to that point ≤ monthly capacity
+- Corrected Saturday route from 252SA to 452SA as per user specification
+- Maintains monthly capacity focus with chronological hour constraint enforcement
+- Algorithm now enforces proper hour progression through the week
+- Pure OR-Tools SCIP solver with advanced constraint handling
+- System processes authentic Supabase database format with improved accuracy
 
 # System Architecture
 
