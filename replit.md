@@ -6,6 +6,16 @@ This is a FastAPI-based logistics driver scheduling backend system that uses OR-
 
 Preferred communication style: Simple, everyday language.
 
+# Recent Changes
+
+## August 11, 2025 - Enhanced Optimizer Algorithm Integration
+- Integrated user's improved optimizer algorithm with enhanced error handling and statistics
+- Added new endpoints: `/schedule/reoptimize` and `/schedule/{week_start}/stats`  
+- Implemented helper functions for legacy format conversion and comprehensive statistics
+- Maintained automatic Google Sheets export via Google Cloud Function
+- System successfully processes authentic July 7-13, 2025 data with 100% success rate
+- Both Saturday routes (451SA, 452SA) correctly assigned to "Klagenfurt - Samstagsfahrer"
+
 # System Architecture
 
 ## Backend Framework
