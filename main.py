@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from config.settings import settings
-from api.routes import drivers, routes, scheduling, health, supabase_ops
+from api.routes import drivers, routes, scheduling, health
 import logging
 
 # Configure logging
@@ -36,7 +36,7 @@ app.include_router(health.router, tags=["Health"])
 app.include_router(drivers.router, prefix="/api/v1", tags=["Drivers"])
 app.include_router(routes.router, prefix="/api/v1", tags=["Routes"])
 app.include_router(scheduling.router, prefix="/api/v1", tags=["Scheduling"])
-app.include_router(supabase_ops.router, prefix="/api/v1", tags=["Supabase Operations"])
+# app.include_router(supabase_ops.router, prefix="/api/v1", tags=["Supabase Operations"])
 
 @app.get("/")
 async def root():
