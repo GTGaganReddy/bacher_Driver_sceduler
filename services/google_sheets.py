@@ -21,21 +21,38 @@ class GoogleSheetsService:
             drivers_payload = []
             
             # Convert optimization results to your GCF format
+            # Handle both dict (route_name -> details) and list formats
             for date_key, date_assignments in assignments.items():
-                for assignment in date_assignments:
-                    # Format duration as H:MM for your function
-                    duration = assignment.get('duration', 8.0)
-                    hour_str = f"{int(duration)}:{int((duration % 1) * 60):02d}"
-                    
-                    driver_data = {
-                        "driver": assignment.get('driver_name', ''),
-                        "route": assignment.get('route_name', ''),
-                        "hour": hour_str,
-                        "remaining_hour": "0:00",  # Your function will calculate this
-                        "date": assignment.get('date', ''),
-                        "status": "update"
-                    }
-                    drivers_payload.append(driver_data)
+                if isinstance(date_assignments, dict):
+                    # New format: route_name -> assignment_details
+                    for route_name, assignment_details in date_assignments.items():
+                        duration = assignment_details.get('duration_hours', 8.0)
+                        hour_str = f"{int(duration)}:{int((duration % 1) * 60):02d}"
+                        
+                        driver_data = {
+                            "driver": assignment_details.get('driver_name', ''),
+                            "route": route_name,
+                            "hour": hour_str,
+                            "remaining_hour": "0:00",
+                            "date": date_key,
+                            "status": "update"
+                        }
+                        drivers_payload.append(driver_data)
+                elif isinstance(date_assignments, list):
+                    # Legacy list format
+                    for assignment in date_assignments:
+                        duration = assignment.get('duration_hours', 8.0)
+                        hour_str = f"{int(duration)}:{int((duration % 1) * 60):02d}"
+                        
+                        driver_data = {
+                            "driver": assignment.get('driver_name', ''),
+                            "route": assignment.get('route_name', ''),
+                            "hour": hour_str,
+                            "remaining_hour": "0:00",
+                            "date": assignment.get('date', date_key),
+                            "status": "update"
+                        }
+                        drivers_payload.append(driver_data)
             
             payload = {"drivers": drivers_payload}
             
