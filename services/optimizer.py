@@ -236,18 +236,25 @@ class DriverRouteOptimizer:
                 
                 driver_remaining_hours[driver_id] = total_available_hours
             
-            # Create objective that prioritizes drivers with more remaining hours
-            for driver_id, remaining_hours in driver_remaining_hours.items():
+            # Create objective that strongly prioritizes drivers with more remaining hours
+            # Sort drivers by remaining hours (descending) to get priority order
+            drivers_by_remaining_hours = sorted(driver_remaining_hours.items(), 
+                                              key=lambda x: x[1], reverse=True)
+            
+            for priority_rank, (driver_id, remaining_hours) in enumerate(drivers_by_remaining_hours):
                 for route_id, route_data in route_info.items():
                     if (driver_id, route_id) in x:
-                        # Weight based on driver's remaining available hours
-                        # Higher remaining hours = higher priority
-                        hours_weight = remaining_hours * 10  # Scale up for better differentiation
+                        # Use priority ranking system - higher priority = much higher weight
+                        # Driver with most hours gets rank 0, second most gets rank 1, etc.
+                        priority_weight = 10000 - (priority_rank * 100)  # Strong differentiation
                         
-                        # Base weight for making assignments (to maximize total assignments)
-                        assignment_weight = 100
+                        # Additional weight based on actual remaining hours
+                        hours_weight = remaining_hours * 50
                         
-                        total_weight = assignment_weight + hours_weight
+                        # Base weight for assignment
+                        assignment_weight = 1000
+                        
+                        total_weight = priority_weight + hours_weight + assignment_weight
                         objective_terms.append(x[driver_id, route_id] * total_weight)
             
             solver.Maximize(sum(objective_terms))
