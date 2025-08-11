@@ -27,8 +27,9 @@ async def optimize_schedule(
         routes = await db_service.get_routes_by_date_range(week_start, week_end)
         availability = await db_service.get_availability_by_date_range(week_start, week_end)
         
-        # Run optimization using Supabase data
-        result = optimize_driver_schedule(drivers, routes, availability)
+        # Run optimization using Supabase data with the main OR-Tools optimizer
+        optimizer = DriverRouteOptimizer()
+        result = optimizer.optimize_assignments(drivers, routes, availability)
         assignments = result.get('assignments', {})
         
         # Save assignments to database
@@ -121,17 +122,27 @@ async def optimize_schedule_advanced(
         assignments = result.get('assignments', {})
         
         for date_str, date_assignments in assignments.items():
-            for assignment in date_assignments:  # date_assignments is a list, not a dict
-                legacy_assignments.append({
-                    "driver": assignment.get('driver_name', ''),
-                    "driver_id": assignment.get('driver_id', 0),
-                    "route": assignment.get('route_name', ''),
-                    "route_id": assignment.get('route_id', 0),
-                    "date": date_str,
-                    "hour": f"{assignment.get('duration', 8.0):.1f}:00",
-                    "remaining_hour": "16:00",
-                    "status": "assigned"
-                })
+            # Check if date_assignments is a list or dict
+            if isinstance(date_assignments, str):
+                logger.error(f"Found string for date_assignments: {date_assignments}")
+                continue
+            elif isinstance(date_assignments, list):
+                for assignment in date_assignments:
+                    if isinstance(assignment, str):
+                        logger.error(f"Found string assignment: {assignment}")
+                        continue
+                    legacy_assignments.append({
+                        "driver": assignment.get('driver_name', ''),
+                        "driver_id": assignment.get('driver_id', 0),
+                        "route": assignment.get('route_name', ''),
+                        "route_id": assignment.get('original_route_id', 0),
+                        "date": date_str,
+                        "hour": f"{assignment.get('duration_hours', 8.0):.1f}:00",
+                        "remaining_hour": "16:00",
+                        "status": "assigned"
+                    })
+            else:
+                logger.error(f"Unexpected date_assignments type: {type(date_assignments)}, value: {date_assignments}")
         
         # Skip database save to avoid conflicts - focus on Google Sheets export
         logger.info(f"Generated {len(legacy_assignments)} assignments for Google Sheets export")

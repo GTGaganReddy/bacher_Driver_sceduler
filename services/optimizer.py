@@ -71,9 +71,31 @@ class DriverRouteOptimizer:
             # Create driver lookup and parse monthly hours
             driver_info = {}
             for driver in self.drivers:
+                # Handle both database format and API format
+                if isinstance(driver, str):
+                    logger.error(f"Received string instead of dict for driver: {driver}")
+                    continue
+                    
+                # Get monthly hours from either field
                 monthly_hours = driver.get('monthly_hours_limit', 174)
+                
+                # Parse details if present (joined query format)
+                if 'details' in driver and driver['details']:
+                    try:
+                        if isinstance(driver['details'], str):
+                            import json
+                            details = json.loads(driver['details'])
+                            if 'monthly_hours' in details:
+                                monthly_hours = details['monthly_hours']
+                        else:
+                            details = driver['details']
+                            if 'monthly_hours' in details:
+                                monthly_hours = details['monthly_hours']
+                    except:
+                        pass  # Use default or existing value
+                
+                # Convert string format to decimal hours
                 if isinstance(monthly_hours, str):
-                    # Convert "174:00" format to decimal hours
                     if ':' in monthly_hours:
                         hours, minutes = monthly_hours.split(':')
                         monthly_hours = float(hours) + float(minutes) / 60.0
@@ -125,6 +147,11 @@ class DriverRouteOptimizer:
             # Create availability lookup
             availability_map = {}
             for avail in self.availability:
+                # Handle both string and dict formats
+                if isinstance(avail, str):
+                    logger.error(f"Received string instead of dict for availability: {avail}")
+                    continue
+                    
                 avail_date = avail['date']
                 if isinstance(avail_date, date):
                     avail_date = avail_date.isoformat()
@@ -180,7 +207,9 @@ class DriverRouteOptimizer:
             }
             
         except Exception as e:
+            import traceback
             logger.error(f"Error parsing input data: {e}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return None
     
     def _build_optimization_model(self, data: Dict):
@@ -375,8 +404,20 @@ class DriverRouteOptimizer:
                             'duration_formatted': f"{int(route_duration)}:{int((route_duration % 1) * 60):02d}"
                         })
         
+        # Convert to list format for consistency with API expectations
+        assignments_list_format = {}
+        for date, date_assignments in detailed_assignments.items():
+            assignments_list_format[date] = []
+            for route_name, assignment_details in date_assignments.items():
+                # Ensure assignment_details is a dict, not a string
+                if isinstance(assignment_details, str):
+                    logger.error(f"Found string instead of dict for assignment: {assignment_details}")
+                    continue
+                assignment_details['route_name'] = route_name
+                assignments_list_format[date].append(assignment_details)
+        
         return {
-            'assignments': detailed_assignments,  # Format: {date: {route_name: {driver_name, driver_id, duration}}}
+            'assignments': assignments_list_format,  # Format: {date: [{driver_name, driver_id, route_name, duration}]}
             'unassigned_routes': unassigned_routes,
             'statistics': statistics,
             'solver_status': 'OPTIMAL' if self.solver.Objective().Value() else 'FEASIBLE',
