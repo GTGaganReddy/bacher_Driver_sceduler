@@ -9,8 +9,8 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "https://nqwyglxhvhlrviknykmt.supabase.co")
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xd3lnbHhodmhscnZpa255a210Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MzQyMTk3OCwiZXhwIjoyMDY4OTk3OTc4fQ.xGolIcNOusVfqpfptE-uSo_eBaSYOx5QI-e9APiTOuA")
     
-    # Google Cloud Function
-    GCF_URL: str = os.getenv("GCF_URL", "https://your-gcf-url.com/update-sheet")
+    # Google Cloud Function - Your driver schedule updater
+    GCF_URL: str = os.getenv("GCF_URL", "https://us-central1-driver-schedule-updater.cloudfunctions.net/update_sheet")
     
     # Application
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"

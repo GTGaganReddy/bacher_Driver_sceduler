@@ -1,6 +1,6 @@
 # Overview
 
-This is a FastAPI-based logistics driver scheduling backend system that uses OR-Tools optimization to automatically assign drivers to routes based on availability. The system integrates with Google Sheets for external data synchronization and uses PostgreSQL (via Supabase) for data persistence. The application optimizes weekly driver schedules by matching available drivers to routes while considering constraints and preferences.
+This is a FastAPI-based logistics driver scheduling backend system that uses OR-Tools optimization to automatically assign drivers to routes based on availability. The system integrates with Google Sheets via Google Cloud Function for automatic schedule updates and uses Supabase PostgreSQL for authentic data persistence. The application optimizes weekly driver schedules for the July 7-13, 2025 period using 21 real drivers and authentic route data, then automatically posts results to Google Sheets via the user's Google Cloud Function.
 
 # User Preferences
 
