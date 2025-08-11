@@ -8,14 +8,15 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
-## August 11, 2025 - Advanced OR-Tools Algorithm with Progressive Hour Consumption
-- Updated algorithm with progressive hour consumption using running balance constraints
-- Running balance variables track remaining capacity after each chronological date
-- Balance constraint: remaining_after_date = remaining_before_date - hours_used_on_date
-- Prevents over-assignment through explicit non-negative remaining hours constraints
-- More sophisticated hour tracking than simple cumulative constraints
+## August 11, 2025 - Sequential OR-Tools Algorithm Implementation
+- Replaced progressive algorithm with true sequential optimization approach
+- Day-by-day chronological processing: solves each date independently in order
+- Dynamic capacity tracking: updates remaining driver hours between each day's optimization
+- Multiple solver instances: creates fresh SCIP solver for each day's route assignments
+- Real-time hour consumption: capacity reduces after each assignment for subsequent days
+- More realistic modeling: mirrors actual schedule building process (day-by-day)
 - Maintains Saturday route 452SA assignment to Klagenfurt - Samstagsfahrer
-- Pure OR-Tools SCIP solver with advanced mathematical programming techniques
+- Pure OR-Tools SCIP solver with sequential mathematical programming approach
 
 # System Architecture
 
