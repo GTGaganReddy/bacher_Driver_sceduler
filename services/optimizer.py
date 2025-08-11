@@ -54,9 +54,8 @@ class DriverRouteOptimizer:
         """
         Run OR-Tools optimization for driver-route assignment
         
-        Fixed Issues:
-        1. Added constraint to prevent multiple routes per driver per day
-        2. Fixed objective to prioritize drivers with most remaining available hours
+        UPDATED: Uses monthly_hours from driver details - removed daily capacity calculation
+        Works directly with monthly capacity for simpler and more accurate optimization
         """
         try:
             # Create the solver
@@ -83,7 +82,7 @@ class DriverRouteOptimizer:
             
             # Parse routes from database format
             route_info = {}
-            routes_by_date = {}  # New: Group routes by date for same-day constraint
+            routes_by_date = {}  # Group routes by date for same-day constraint
             
             for route in routes_data:
                 route_id = route.get('route_id') or route.get('id')
@@ -96,7 +95,6 @@ class DriverRouteOptimizer:
                 duration_str = details.get('duration', '8:00')
                 duration_hours = parse_time_string_to_hours(duration_str)
                 
-                # Extract route code from details as backup
                 route_code = details.get('route_code', route_name)
                 
                 route_info[route_id] = {
@@ -115,27 +113,25 @@ class DriverRouteOptimizer:
             
             # Parse availability from database format
             driver_availability = {}
+            driver_available_days = {}  # Track number of available days per driver
+            
             for avail in availability_data:
                 driver_id = avail.get('driver_id')
                 date_str = str(avail.get('date', ''))
                 is_available = avail.get('available', False)
                 
-                # Convert Decimal to float
-                available_hours = avail.get('available_hours', 8.0)
-                if hasattr(available_hours, '__float__'):
-                    available_hours = float(available_hours)
-                elif isinstance(available_hours, str):
-                    available_hours = parse_time_string_to_hours(available_hours)
-                
                 if driver_id not in driver_availability:
                     driver_availability[driver_id] = {}
+                    driver_available_days[driver_id] = 0
                 
                 driver_availability[driver_id][date_str] = {
                     'available': is_available,
-                    'available_hours': available_hours,
-                    'max_routes': avail.get('max_routes', 1),
-                    'shift_preference': avail.get('shift_preference', 'any')
+                    'shift_preference': avail.get('shift_preference', 'any')  # Optional field
                 }
+                
+                # Count available days for this driver
+                if is_available:
+                    driver_available_days[driver_id] += 1
             
             # Find special assignments
             klagenfurt_driver_id = None
@@ -180,7 +176,7 @@ class DriverRouteOptimizer:
                 if constraint_vars:
                     solver.Add(sum(constraint_vars) <= 1)
             
-            # NEW CONSTRAINT 2: Each driver can only be assigned ONE route per day
+            # Constraint 2: Each driver can only be assigned ONE route per day
             for driver_id in driver_info.keys():
                 for date_str, route_ids_on_date in routes_by_date.items():
                     # Check if driver is available on this date
@@ -219,42 +215,29 @@ class DriverRouteOptimizer:
                     logger.info("Added constraint: Saturday route 252SA assigned to Klagenfurt - Samstagsfahrer")
                 else:
                     logger.warning("Cannot assign 252SA to Klagenfurt - Samstagsfahrer (driver not available)")
+            else:
+                logger.warning(f"Special assignment check - Klagenfurt driver found: {klagenfurt_driver_id is not None}, Saturday 252SA route found: {saturday_252sa_route_id is not None}")
             
-            # FIXED OBJECTIVE: Prioritize drivers with most remaining available hours
+            # UPDATED OBJECTIVE: Simplified to focus on monthly capacity and availability
             objective_terms = []
             
-            # Pre-calculate current remaining hours for each driver based on their daily availability
-            driver_remaining_hours = {}
             for driver_id, driver_data in driver_info.items():
-                total_available_hours = 0
+                monthly_hours = driver_data['monthly_hours']
+                available_days = driver_available_days.get(driver_id, 0)
                 
-                # Sum up available hours across all days they're available
-                if driver_id in driver_availability:
-                    for date_str, avail_data in driver_availability[driver_id].items():
-                        if avail_data['available']:
-                            total_available_hours += avail_data['available_hours']
-                
-                driver_remaining_hours[driver_id] = total_available_hours
-            
-            # Create objective that strongly prioritizes drivers with more remaining hours
-            # Sort drivers by remaining hours (descending) to get priority order
-            drivers_by_remaining_hours = sorted(driver_remaining_hours.items(), 
-                                              key=lambda x: x[1], reverse=True)
-            
-            for priority_rank, (driver_id, remaining_hours) in enumerate(drivers_by_remaining_hours):
                 for route_id, route_data in route_info.items():
                     if (driver_id, route_id) in x:
-                        # Use priority ranking system - higher priority = much higher weight
-                        # Driver with most hours gets rank 0, second most gets rank 1, etc.
-                        priority_weight = 10000 - (priority_rank * 100)  # Strong differentiation
+                        # Weight calculation based on:
+                        # 1. Monthly capacity (higher = better for workload distribution)
+                        # 2. Available days (more days = more flexible)
                         
-                        # Additional weight based on actual remaining hours
-                        hours_weight = remaining_hours * 50
+                        capacity_weight = monthly_hours * 5  # Favor drivers with higher monthly capacity
+                        flexibility_weight = available_days * 10  # Favor drivers available more days
                         
-                        # Base weight for assignment
-                        assignment_weight = 1000
+                        # Base weight for making assignments
+                        assignment_weight = 100
                         
-                        total_weight = priority_weight + hours_weight + assignment_weight
+                        total_weight = assignment_weight + capacity_weight + flexibility_weight
                         objective_terms.append(x[driver_id, route_id] * total_weight)
             
             solver.Maximize(sum(objective_terms))
@@ -309,21 +292,22 @@ class DriverRouteOptimizer:
                             'duration_hours': route_data['duration_hours']
                         })
                 
-                # Calculate driver utilization based on available hours vs assigned hours
+                # Calculate driver utilization based on monthly hours only
                 driver_utilization = {}
                 for driver_id, driver_data in driver_info.items():
-                    # Calculate total available hours for this driver
-                    total_available_hours = driver_remaining_hours.get(driver_id, 0)
+                    monthly_hours = driver_data['monthly_hours']
                     hours_used = driver_hours_used.get(driver_id, 0)
+                    available_days = driver_available_days.get(driver_id, 0)
                     
-                    # Use available hours as the base for utilization calculation
-                    utilization_rate = (hours_used / total_available_hours * 100) if total_available_hours > 0 else 0
+                    # Calculate utilization against monthly capacity
+                    utilization_rate = (hours_used / monthly_hours * 100) if monthly_hours > 0 else 0
                     
                     driver_utilization[driver_id] = {
                         'name': driver_data['name'],
-                        'weekly_available_hours': total_available_hours,
+                        'monthly_capacity_hours': monthly_hours,
+                        'available_days': available_days,
                         'hours_used': hours_used,
-                        'hours_remaining': total_available_hours - hours_used,
+                        'hours_remaining': monthly_hours - hours_used,
                         'utilization_rate': round(utilization_rate, 2)
                     }
                 
