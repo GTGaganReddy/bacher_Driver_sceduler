@@ -1,0 +1,318 @@
+# API Operations Guide for Driver Scheduling System
+
+## Overview
+Your Supabase database supports full CRUD operations through the Supabase API. Here are the key operations you can perform:
+
+## 🚗 Driver Availability Management
+
+### 1. Update Driver Availability
+```javascript
+// Update a single driver's availability for a specific date
+const { data, error } = await supabase
+  .from('driver_availability')
+  .update({
+    available: false,
+    available_hours: 0,
+    notes: 'Sick leave'
+  })
+  .eq('driver_id', 1)
+  .eq('date', '2025-07-07');
+```
+
+### 2. Batch Update Driver Availability
+```javascript
+// Update multiple drivers at once
+const updates = [
+  { driver_id: 1, date: '2025-07-07', available: false, notes: 'Vacation' },
+  { driver_id: 2, date: '2025-07-07', available_hours: 4, shift_preference: 'morning' }
+];
+
+for (const update of updates) {
+  await supabase
+    .from('driver_availability')
+    .update(update)
+    .eq('driver_id', update.driver_id)
+    .eq('date', update.date);
+}
+```
+
+### 3. Create New Availability Record
+```javascript
+// Add availability for a new date
+const { data, error } = await supabase
+  .from('driver_availability')
+  .insert({
+    driver_id: 1,
+    date: '2025-07-14',
+    available: true,
+    available_hours: 8,
+    shift_preference: 'any',
+    max_routes: 2,
+    notes: 'Available for overtime'
+  });
+```
+
+### 4. Get Driver Availability
+```javascript
+// Get availability for a specific date
+const { data, error } = await supabase
+  .from('driver_availability')
+  .select(`
+    *,
+    drivers (name, details)
+  `)
+  .eq('date', '2025-07-07')
+  .eq('available', true);
+
+// Get availability for a date range
+const { data, error } = await supabase
+  .from('driver_availability')
+  .select(`
+    *,
+    drivers (name, details)
+  `)
+  .gte('date', '2025-07-07')
+  .lte('date', '2025-07-13')
+  .order('date', { ascending: true });
+```
+
+### 5. Delete Availability Record
+```javascript
+// Remove availability record
+const { data, error } = await supabase
+  .from('driver_availability')
+  .delete()
+  .eq('driver_id', 1)
+  .eq('date', '2025-07-07');
+```
+
+## 🛣️ Route Management
+
+### 1. Add New Route
+```javascript
+// Add a single new route
+const { data, error } = await supabase
+  .from('routes')
+  .insert({
+    date: '2025-07-14',
+    route_name: '441oS',
+    details: {
+      duration: '9:00',
+      type: 'weekday',
+      route_code: '441oS',
+      special_requirements: 'Early morning pickup'
+    },
+    day_of_week: 'monday'
+  });
+```
+
+### 2. Batch Add Routes
+```javascript
+// Add multiple routes at once
+const newRoutes = [
+  {
+    date: '2025-07-14',
+    route_name: '441oS',
+    details: { duration: '9:00', type: 'weekday' },
+    day_of_week: 'monday'
+  },
+  {
+    date: '2025-07-14',
+    route_name: '442oS',
+    details: { duration: '10:00', type: 'weekday' },
+    day_of_week: 'monday'
+  }
+];
+
+const { data, error } = await supabase
+  .from('routes')
+  .insert(newRoutes);
+```
+
+### 3. Update Existing Route
+```javascript
+// Update route details
+const { data, error } = await supabase
+  .from('routes')
+  .update({
+    details: {
+      duration: '10:30',
+      type: 'weekday',
+      route_code: '431oS',
+      modified_schedule: true
+    }
+  })
+  .eq('route_id', 1);
+```
+
+### 4. Delete Route
+```javascript
+// Delete a specific route
+const { data, error } = await supabase
+  .from('routes')
+  .delete()
+  .eq('route_id', 1);
+
+// Delete all routes for a specific date
+const { data, error } = await supabase
+  .from('routes')
+  .delete()
+  .eq('date', '2025-07-07');
+```
+
+### 5. Get Routes
+```javascript
+// Get routes for a specific date
+const { data, error } = await supabase
+  .from('routes')
+  .select('*')
+  .eq('date', '2025-07-07')
+  .order('route_name');
+
+// Get routes for a date range
+const { data, error } = await supabase
+  .from('routes')
+  .select('*')
+  .gte('date', '2025-07-07')
+  .lte('date', '2025-07-13')
+  .order('date', { ascending: true });
+```
+
+## 📊 Advanced Queries
+
+### 1. Get Available Drivers for Scheduling
+```javascript
+// Get all available drivers for a specific date with their constraints
+const { data, error } = await supabase
+  .from('driver_availability')
+  .select(`
+    *,
+    drivers (name, details)
+  `)
+  .eq('date', '2025-07-07')
+  .eq('available', true)
+  .gt('available_hours', 0)
+  .order('available_hours', { ascending: false });
+```
+
+### 2. Check Route-Driver Compatibility
+```javascript
+// Get routes and available drivers for the same date
+const { data: routesData } = await supabase
+  .from('routes')
+  .select('*')
+  .eq('date', '2025-07-07');
+
+const { data: driversData } = await supabase
+  .from('driver_availability')
+  .select(`
+    *,
+    drivers (name, details)
+  `)
+  .eq('date', '2025-07-07')
+  .eq('available', true);
+```
+
+### 3. Update Driver Hours After Assignment
+```javascript
+// Reduce available hours after assigning a route
+const routeDuration = 11; // hours
+const { data, error } = await supabase
+  .rpc('update_driver_hours', {
+    p_driver_id: 1,
+    p_date: '2025-07-07',
+    p_hours_used: routeDuration
+  });
+
+// You'd need to create this SQL function in your database:
+/*
+CREATE OR REPLACE FUNCTION update_driver_hours(
+  p_driver_id INT,
+  p_date DATE,
+  p_hours_used DECIMAL
+)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE driver_availability 
+  SET available_hours = available_hours - p_hours_used,
+      max_routes = GREATEST(0, max_routes - 1),
+      updated_at = NOW()
+  WHERE driver_id = p_driver_id AND date = p_date;
+END;
+$$ LANGUAGE plpgsql;
+*/
+```
+
+## 🔒 Real-time Subscriptions
+```javascript
+// Listen for changes to driver availability
+const subscription = supabase
+  .channel('driver_availability_changes')
+  .on('postgres_changes', 
+    { 
+      event: '*', 
+      schema: 'public', 
+      table: 'driver_availability' 
+    }, 
+    (payload) => {
+      console.log('Availability changed:', payload);
+      // Update your UI accordingly
+    }
+  )
+  .subscribe();
+
+// Listen for route changes
+const routeSubscription = supabase
+  .channel('route_changes')
+  .on('postgres_changes', 
+    { 
+      event: '*', 
+      schema: 'public', 
+      table: 'routes' 
+    }, 
+    (payload) => {
+      console.log('Route changed:', payload);
+      // Refresh route display
+    }
+  )
+  .subscribe();
+```
+
+## 📝 Common Use Cases
+
+### Mark Driver Unavailable
+```javascript
+async function markDriverUnavailable(driverId, date, reason) {
+  const { data, error } = await supabase
+    .from('driver_availability')
+    .update({
+      available: false,
+      available_hours: 0,
+      max_routes: 0,
+      notes: reason,
+      updated_at: new Date().toISOString()
+    })
+    .eq('driver_id', driverId)
+    .eq('date', date);
+  
+  return { data, error };
+}
+```
+
+### Add Emergency Route
+```javascript
+async function addEmergencyRoute(date, routeName, duration) {
+  const dayOfWeek = new Date(date).toLocaleLowerCase().substring(0, 3) + 'day';
+  
+  const { data, error } = await supabase
+    .from('routes')
+    .insert({
+      date,
+      route_name: routeName,
+      details: {
+        duration,
+        type: 'emergency',
+        route_code: routeName,
+        priority: 'high'
+      },
+      day_
