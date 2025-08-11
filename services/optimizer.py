@@ -112,6 +112,8 @@ def run_ortools_optimization(drivers: List[Dict], routes: List[Dict], availabili
         driver_availability = {}
         driver_available_days = {}
         
+        logger.info(f"Loading availability data for {len(availability)} availability records")
+        
         for avail in availability:
             driver_id = avail.get('driver_id')
             date_str = str(avail.get('date', ''))
@@ -125,6 +127,11 @@ def run_ortools_optimization(drivers: List[Dict], routes: List[Dict], availabili
                 'available': is_available,
                 'shift_preference': avail.get('shift_preference', 'any')
             }
+            
+            # Debug log unavailable drivers
+            if not is_available:
+                driver_name = driver_info.get(driver_id, {}).get('name', f'Driver_{driver_id}')
+                logger.info(f"Loaded unavailable: {driver_name} on {date_str}")
             
             if is_available:
                 driver_available_days[driver_id] += 1
@@ -156,20 +163,28 @@ def run_ortools_optimization(drivers: List[Dict], routes: List[Dict], availabili
         driver_hours_used = {driver_id: 0 for driver_id in driver_info.keys()}
         
         # Pre-populate assignments with "F" for unavailable drivers on each date
+        total_f_entries = 0
         for date_obj, date_str in sorted_dates:
             all_assignments[date_str] = {}
             
             # For each driver, check if they're unavailable on this date
             for driver_id, driver_data in driver_info.items():
-                is_available = False
+                is_available = True  # Default to available if no data
                 
-                if (driver_id in driver_availability and 
-                    date_str in driver_availability[driver_id]):
-                    is_available = driver_availability[driver_id][date_str]['available']
+                if driver_id in driver_availability:
+                    if date_str in driver_availability[driver_id]:
+                        is_available = driver_availability[driver_id][date_str]['available']
+                        if not is_available:
+                            logger.info(f"Found unavailable: {driver_data['name']} on {date_str}")
+                    else:
+                        logger.debug(f"No availability data for {driver_data['name']} on {date_str}")
+                else:
+                    logger.debug(f"No availability data for driver {driver_data['name']} (ID: {driver_id})")
                 
                 # If driver is unavailable, assign "F" with 0 hours
                 if not is_available:
-                    all_assignments[date_str][f"F_{driver_id}"] = {
+                    f_key = f"F_{driver_data['name']}_{date_str}"
+                    all_assignments[date_str][f_key] = {
                         'driver_name': driver_data['name'],
                         'driver_id': driver_id,
                         'route_id': None,
@@ -177,6 +192,10 @@ def run_ortools_optimization(drivers: List[Dict], routes: List[Dict], availabili
                         'duration_formatted': "00:00",
                         'status': 'unavailable'
                     }
+                    total_f_entries += 1
+                    logger.info(f"Created F entry: {driver_data['name']} unavailable on {date_str}")
+        
+        logger.info(f"Created {total_f_entries} F entries for unavailable drivers")
         
         # SEQUENTIAL OPTIMIZATION: Process each date in chronological order
         for date_obj, current_date in sorted_dates:

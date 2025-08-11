@@ -23,8 +23,8 @@ class GoogleSheetsService:
             if all_drivers and all_dates:
                 # Create assignment lookup for quick access
                 assignment_lookup = {}
-                unavailable_lookup = {}
                 
+                # First pass: collect all assignments and F entries
                 for date_key, date_assignments in assignments.items():
                     if isinstance(date_assignments, dict):
                         for route_name, assignment_details in date_assignments.items():
@@ -32,13 +32,13 @@ class GoogleSheetsService:
                             
                             if driver_name not in assignment_lookup:
                                 assignment_lookup[driver_name] = {}
-                                unavailable_lookup[driver_name] = {}
                             
-                            # Check if this is an "F" entry (unavailable driver)
                             if route_name.startswith('F_') and assignment_details.get('status') == 'unavailable':
-                                unavailable_lookup[driver_name][date_key] = {
+                                # F entry for unavailable driver
+                                assignment_lookup[driver_name][date_key] = {
                                     "route": "F",
-                                    "hour": "0:00"
+                                    "hour": "0:00",
+                                    "type": "unavailable"
                                 }
                             elif assignment_details.get('status') == 'assigned':
                                 # Regular route assignment
@@ -47,7 +47,8 @@ class GoogleSheetsService:
                                 
                                 assignment_lookup[driver_name][date_key] = {
                                     "route": route_name,
-                                    "hour": hour_str
+                                    "hour": hour_str,
+                                    "type": "assigned"
                                 }
                 
                 # Create entries for ALL drivers on ALL dates (assigned, unavailable "F", or blank)
@@ -56,23 +57,12 @@ class GoogleSheetsService:
                     
                     for date_key in all_dates:
                         if driver_name in assignment_lookup and date_key in assignment_lookup[driver_name]:
-                            # Driver has route assignment on this date
+                            # Driver has an assignment (either route or F) on this date
                             assignment = assignment_lookup[driver_name][date_key]
                             driver_data = {
                                 "driver": driver_name,
                                 "route": assignment["route"],
                                 "hour": assignment["hour"],
-                                "remaining_hour": "0:00",
-                                "date": date_key,
-                                "status": "update"
-                            }
-                        elif driver_name in unavailable_lookup and date_key in unavailable_lookup[driver_name]:
-                            # Driver is unavailable on this date - send "F" entry
-                            unavailable_info = unavailable_lookup[driver_name][date_key]
-                            driver_data = {
-                                "driver": driver_name,
-                                "route": "F",
-                                "hour": "0:00",
                                 "remaining_hour": "0:00",
                                 "date": date_key,
                                 "status": "update"
