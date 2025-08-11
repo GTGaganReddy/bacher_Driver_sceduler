@@ -52,16 +52,33 @@ class DriverRouteOptimizer:
         self._build_optimization_model(parsed_data)
         
         # Solve
+        logger.info("Starting OR-Tools solver...")
         status = self.solver.Solve()
         
-        if status == pywraplp.Solver.OPTIMAL or status == pywraplp.Solver.FEASIBLE:
+        logger.info(f"Solver finished with status: {status}")
+        logger.info(f"Status meanings: OPTIMAL=0, FEASIBLE=1, INFEASIBLE=2, UNBOUNDED=3, ABNORMAL=4, NOT_SOLVED=6")
+        
+        if status == pywraplp.Solver.OPTIMAL:
+            logger.info("Found optimal solution")
             return self._extract_solution(parsed_data)
+        elif status == pywraplp.Solver.FEASIBLE:
+            logger.info("Found feasible solution")
+            return self._extract_solution(parsed_data)
+        elif status == pywraplp.Solver.INFEASIBLE:
+            logger.error("Problem is infeasible - constraints are too restrictive")
+            return {"error": f"Infeasible problem - constraints cannot be satisfied. Status: {status}"}
+        elif status == pywraplp.Solver.UNBOUNDED:
+            logger.error("Problem is unbounded")
+            return {"error": f"Unbounded problem. Status: {status}"}
         else:
+            logger.error(f"Solver failed with status {status}")
             return {"error": f"No solution found. Status: {status}"}
     
     def _parse_input_data(self) -> Dict:
         """Parse and structure input data for optimization"""
         try:
+            logger.info(f"Parsing input data: {len(self.drivers)} drivers, {len(self.routes)} routes, {len(self.availability)} availability records")
+            
             # Create driver lookup and parse monthly hours
             driver_info = {}
             for driver in self.drivers:
@@ -140,12 +157,18 @@ class DriverRouteOptimizer:
                     'shift_preference': 'any'
                 }
             
-            return {
+            result = {
                 'driver_info': driver_info,
                 'routes_by_date': routes_by_date,
                 'availability_map': availability_map,
                 'dates': sorted(routes_by_date.keys())
             }
+            
+            logger.info(f"Parsed data: {len(driver_info)} drivers, {len(routes_by_date)} dates, {sum(len(routes) for routes in routes_by_date.values())} total routes")
+            for date, routes in routes_by_date.items():
+                logger.info(f"  Date {date}: {len(routes)} routes - {[r['route_name'] for r in routes]}")
+            
+            return result
             
         except Exception as e:
             logger.error(f"Error parsing input data: {e}")
@@ -259,7 +282,7 @@ class DriverRouteOptimizer:
                 'driver_assignments': {},
                 'date_breakdown': {},
                 'optimization_method': 'OR-Tools Linear Programming',
-                'solver_status': 'OPTIMAL' if self.solver.objective().Value() > 0 else 'FEASIBLE'
+                'solver_status': 'OPTIMAL'
             }
             
             driver_info = data['driver_info']
@@ -283,7 +306,7 @@ class DriverRouteOptimizer:
                                 date in self.decision_vars[driver_id] and 
                                 route_id in self.decision_vars[driver_id][date]):
                                 
-                                if self.decision_vars[driver_id][date][route_id].solution_value() > 0.5:
+                                if self.decision_vars[driver_id][date][route_id].SolutionValue() > 0.5:
                                     # This route is assigned to this driver
                                     assignments[date].append({
                                         'driver_id': driver_id,
