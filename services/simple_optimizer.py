@@ -11,6 +11,22 @@ import json
 logger = logging.getLogger(__name__)
 
 def optimize_driver_schedule(drivers: List[Dict], routes: List[Dict], availability: List[Dict]) -> Dict[str, Any]:
+    """Call the debug OR-Tools algorithm first"""
+    from services.or_tools_debug import debug_or_tools_optimization
+    
+    # Try the real OR-Tools first to capture errors
+    try:
+        debug_result = debug_or_tools_optimization(drivers, routes, availability)
+        if 'error' not in debug_result:
+            return debug_result
+        else:
+            logger.error(f"OR-Tools debug failed: {debug_result['error']}")
+            logger.info("Falling back to enhanced greedy algorithm")
+    except Exception as e:
+        logger.error(f"OR-Tools debug crashed: {e}")
+        logger.info("Falling back to enhanced greedy algorithm")
+    
+    # Continue with fallback algorithm below
     """
     Enhanced OR-Tools driver schedule optimization using your authentic Supabase data
     
