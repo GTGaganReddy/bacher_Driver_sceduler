@@ -20,8 +20,11 @@ class SupabaseService:
         
         if self.url and self.key:
             try:
+                # Use updated credentials from user
+                self.url = "https://nqwyglxhvhlrviknykmt.supabase.co"
+                self.key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xd3lnbHhodmhscnZpa255a210Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MzQyMTk3OCwiZXhwIjoyMDY4OTk3OTc4fQ.xGolIcNOusVfqpfptE-uSo_eBaSYOx5QI-e9APiTOuA"
                 self.client = create_client(self.url, self.key)
-                logger.info("Supabase client initialized successfully")
+                logger.info("Supabase client initialized successfully with REST API")
             except Exception as e:
                 logger.error(f"Failed to initialize Supabase client: {e}")
                 self.client = None

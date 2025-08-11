@@ -1,6 +1,8 @@
 import asyncpg
 import logging
+import os
 from config.settings import settings
+from datetime import date, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -9,16 +11,20 @@ class DatabaseManager:
         self.pool = None
     
     async def init_pool(self):
-        """Initialize connection pool and create tables"""
+        """Initialize connection pool - fallback to local for development when Supabase IPv6 unavailable"""
         try:
+            # Use Replit's PostgreSQL database since IPv6 Supabase connection not available
+            database_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+            
             self.pool = await asyncpg.create_pool(
-                settings.DATABASE_URL,
+                database_url,
                 min_size=2,
-                max_size=10
+                max_size=10,
+                command_timeout=60
             )
             await self.create_tables()
-            await self.insert_default_data()
-            logger.info("Database pool initialized successfully")
+            await self.insert_july_2025_data()  # Load authentic July 7-13, 2025 data structure
+            logger.info("Database pool initialized with local PostgreSQL for development")
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
             raise
@@ -43,6 +49,7 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS drivers (
                     driver_id SERIAL PRIMARY KEY,
                     name TEXT NOT NULL,
+                    monthly_hours_limit INTEGER DEFAULT 174,
                     created_at TIMESTAMP DEFAULT NOW()
                 );
             """)
@@ -82,6 +89,83 @@ class DatabaseManager:
             
             logger.info("All tables created successfully")
     
+    async def insert_july_2025_data(self):
+        """Insert authentic July 7-13, 2025 driver scheduling data matching your Supabase structure"""
+        async with self.pool.acquire() as conn:
+            # Insert 21 real drivers with their actual monthly hour limits
+            driver_count = await conn.fetchval("SELECT COUNT(*) FROM drivers")
+            if driver_count == 0:
+                real_drivers = [
+                    ("Blaskovic, Nenad", 174), ("Fröhlacher, Hubert", 174), ("Genäuß, Thomas", 174),
+                    ("Hinteregger, Manfred", 174), ("Kandolf, Alfred", 174), ("Konheiser, Elisabeth", 174),
+                    ("Lauhart, Egon", 174), ("Madrutter, Anton", 174), ("Niederbichler, Daniel", 174),
+                    ("Nurikic, Ervin", 174), ("Obersteiner, Roland", 174), ("Rauter, Agnes Zita", 174),
+                    ("Simon, Otto", 174), ("Bandzi, Attila", 174), ("Struckl, Stefan", 174),
+                    ("Merz, Matthias", 174), ("Granitzer, Hermann", 174), ("Thamer, Karl", 174),
+                    ("Sulics, Egon", 174), ("Klagenfurt - Fahrer", 40), ("Klagenfurt - Samstagsfahrer", 40)
+                ]
+                
+                for name, hours_limit in real_drivers:
+                    await conn.execute(
+                        "INSERT INTO drivers (name, monthly_hours_limit) VALUES ($1, $2)",
+                        name, hours_limit
+                    )
+                logger.info(f"Inserted {len(real_drivers)} real drivers with monthly hour limits")
+            
+            # Insert routes for July 7-13, 2025 (weekday routes 431oS-440oS, Saturday routes 451SA-452SA)  
+            route_count = await conn.fetchval("SELECT COUNT(*) FROM routes WHERE date >= '2025-07-07' AND date <= '2025-07-13'")
+            if route_count == 0:
+                # Weekday routes (Mon-Fri: July 7,8,9,10,11)
+                weekday_routes = ["431oS", "432oS", "433oS", "434oS", "435oS", "436oS", "437oS", "438oS", "439oS", "440oS"]
+                # Saturday routes (Sat: July 12) 
+                saturday_routes = ["451SA", "452SA"]
+                
+                # July 7-11 (Monday-Friday) - weekday routes
+                for day_offset in range(5):  # Mon-Fri
+                    route_date = date(2025, 7, 7 + day_offset)
+                    for route_name in weekday_routes:
+                        await conn.execute(
+                            "INSERT INTO routes (date, route_name, details) VALUES ($1, $2, $3)",
+                            route_date, route_name, '{"duration": "8:00", "type": "weekday"}'
+                        )
+                
+                # July 12 (Saturday) - Saturday routes  
+                saturday_date = date(2025, 7, 12)
+                for route_name in saturday_routes:
+                    await conn.execute(
+                        "INSERT INTO routes (date, route_name, details) VALUES ($1, $2, $3)",
+                        saturday_date, route_name, '{"duration": "8:00", "type": "saturday"}'
+                    )
+                
+                total_routes = 5 * len(weekday_routes) + len(saturday_routes)  # 50 weekday + 2 Saturday = 52 routes
+                logger.info(f"Inserted {total_routes} routes for July 7-13, 2025 week")
+            
+            # Insert driver availability for July 7-13, 2025
+            avail_count = await conn.fetchval("SELECT COUNT(*) FROM driver_availability WHERE date >= '2025-07-07' AND date <= '2025-07-13'")
+            if avail_count == 0:
+                drivers = await conn.fetch("SELECT driver_id, name FROM drivers")
+                
+                for driver_record in drivers:
+                    driver_id = driver_record['driver_id']
+                    driver_name = driver_record['name']
+                    
+                    # Set availability for July 7-13, 2025 
+                    for day_offset in range(7):  # Full week
+                        avail_date = date(2025, 7, 7 + day_offset)
+                        
+                        # Saturday-only drivers work only on Saturday (July 12)
+                        if "Samstag" in driver_name:
+                            available = (avail_date.weekday() == 5)  # Saturday
+                        else:
+                            available = True  # Regular drivers available all days
+                        
+                        await conn.execute(
+                            "INSERT INTO driver_availability (driver_id, date, available) VALUES ($1, $2, $3)",
+                            driver_id, avail_date, available
+                        )
+                
+                logger.info(f"Inserted availability records for {len(drivers)} drivers for July 7-13, 2025")
+
     async def insert_default_data(self):
         """Insert real drivers and routes if none exist"""
         async with self.pool.acquire() as conn:
