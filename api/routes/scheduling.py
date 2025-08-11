@@ -100,6 +100,16 @@ async def optimize_schedule_advanced(
         availability = await db_service.get_availability_by_date_range(week_start, week_end)
         
         # Run optimization using your authentic July 7-13, 2025 Supabase data with the real OR-Tools optimizer
+        logger.info(f"Database data: {len(drivers)} drivers, {len(routes)} routes, {len(availability)} availability records")
+        
+        # Debug the actual data structure from database
+        if drivers:
+            logger.info(f"Sample driver: {drivers[0]}")
+        if routes: 
+            logger.info(f"Sample route: {routes[0]}")
+        if availability:
+            logger.info(f"Sample availability: {availability[0]}")
+        
         optimizer = DriverRouteOptimizer()
         result = optimizer.optimize_assignments(drivers, routes, availability)
         

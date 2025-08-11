@@ -134,14 +134,15 @@ class DriverRouteOptimizer:
                 if avail_date not in availability_map:
                     availability_map[avail_date] = {}
                 
-                # Use reasonable defaults when fields don't exist in database
-                available_hours = 16.0  # Default 16 hours available per day
-                max_routes = 3         # Default max 3 routes per day
+                # Get actual values from database or use realistic defaults
+                available_hours = float(avail.get('available_hours', 16.0))  # Use DB value or 16h default
+                max_routes = int(avail.get('max_routes', 3))                  # Use DB value or 3 routes default
                 
-                if 'available_hours' in avail:
-                    available_hours = float(avail.get('available_hours', 16.0))
-                if 'max_routes' in avail:
-                    max_routes = int(avail.get('max_routes', 3))
+                # Override if database values are too restrictive for 11-hour routes
+                if available_hours < 12.0:
+                    available_hours = 16.0  # Increase to handle 11+ hour routes
+                if max_routes < 2:
+                    max_routes = 2
                 
                 availability_map[avail_date][driver_id] = {
                     'available': avail.get('available', False),
@@ -158,6 +159,11 @@ class DriverRouteOptimizer:
             
             logger.info(f"Parsed data: {len(driver_info)} drivers, {len(routes_by_date)} dates, {total_routes} routes")
             logger.info(f"Available driver-days: {available_drivers}")
+            logger.info(f"Original route count from input: {len(self.routes)}")
+            
+            # Log routes by date for debugging
+            for date_str, routes_list in routes_by_date.items():
+                logger.info(f"Date {date_str}: {len(routes_list)} routes")
             
             # Sample availability data
             if availability_map:
