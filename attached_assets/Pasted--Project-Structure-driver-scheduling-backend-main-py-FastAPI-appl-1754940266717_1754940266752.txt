@@ -1,0 +1,836 @@
+# Project Structure:
+# 
+# driver_scheduling_backend/
+# ├── main.py                 # FastAPI application entry point
+# ├── requirements.txt        # Dependencies
+# ├── .env.example           # Environment variables template
+# ├── config/
+# │   └── settings.py        # Configuration management
+# ├── database/
+# │   ├── __init__.py
+# │   ├── connection.py      # Database connection management
+# │   └── models.py          # Database models and schemas
+# ├── api/
+# │   ├── __init__.py
+# │   ├── routes/
+# │   │   ├── __init__.py
+# │   │   ├── drivers.py     # Driver-related endpoints
+# │   │   ├── routes.py      # Route-related endpoints
+# │   │   ├── scheduling.py  # Scheduling endpoints
+# │   │   └── health.py      # Health check endpoints
+# │   └── dependencies.py    # Shared dependencies
+# ├── services/
+# │   ├── __init__.py
+# │   ├── optimizer.py       # OR-Tools scheduling logic
+# │   ├── database.py        # Database service layer
+# │   └── google_sheets.py   # Google Sheets integration
+# ├── schemas/
+# │   ├── __init__.py
+# │   └── models.py          # Pydantic models
+# └── utils/
+#     ├── __init__.py
+#     └── logger.py          # Logging configuration
+
+# =============================================================================
+# main.py - FastAPI Application Entry Point
+# =============================================================================
+
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from config.settings import settings
+from database.connection import DatabaseManager
+from api.routes import drivers, routes, scheduling, health
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+# Initialize database manager
+db_manager = DatabaseManager()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Starting up Driver Scheduling Backend...")
+    await db_manager.init_pool()
+    logger.info("Database initialized successfully")
+    yield
+    # Shutdown
+    logger.info("Shutting down...")
+    await db_manager.close_pool()
+
+# Create FastAPI application
+app = FastAPI(
+    title="Driver Scheduling Backend",
+    description="Backend service for logistics driver scheduling with OR-Tools optimization",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Include routers
+app.include_router(health.router, tags=["Health"])
+app.include_router(drivers.router, prefix="/api/v1", tags=["Drivers"])
+app.include_router(routes.router, prefix="/api/v1", tags=["Routes"])
+app.include_router(scheduling.router, prefix="/api/v1", tags=["Scheduling"])
+
+@app.get("/")
+async def root():
+    """Root endpoint with API info"""
+    return {
+        "service": "Driver Scheduling Backend",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=settings.PORT, reload=settings.DEBUG)
+
+# =============================================================================
+# requirements.txt
+# =============================================================================
+
+"""
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+asyncpg==0.29.0
+httpx==0.25.2
+ortools==9.8.3296
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+supabase==2.0.0
+postgrest==0.13.0
+"""
+
+# =============================================================================
+# .env.example
+# =============================================================================
+
+"""
+# Supabase Database Configuration
+DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres
+SUPABASE_URL=https://[YOUR-PROJECT-REF].supabase.co
+SUPABASE_KEY=[YOUR-ANON-KEY]
+
+# Alternative: Local PostgreSQL
+# DATABASE_URL=postgresql://user:password@localhost:5432/scheduler
+
+# Google Cloud Function
+GCF_URL=https://your-gcf-url.com/update-sheet
+
+# Application Settings
+DEBUG=true
+PORT=8000
+WEEK_DAYS=7
+
+# Logging
+LOG_LEVEL=INFO
+"""
+
+# =============================================================================
+# config/settings.py - Configuration Management
+# =============================================================================
+
+from pydantic_settings import BaseSettings
+from typing import Optional
+
+class Settings(BaseSettings):
+    # Supabase Database
+    DATABASE_URL: str = "postgresql://postgres:password@db.project.supabase.co:5432/postgres"
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_KEY: Optional[str] = None
+    
+    # Google Cloud Function
+    GCF_URL: str = "https://your-gcf-url.com/update-sheet"
+    
+    # Application
+    DEBUG: bool = False
+    PORT: int = 8000
+    WEEK_DAYS: int = 7
+    
+    # Logging
+    LOG_LEVEL: str = "INFO"
+    
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
+
+# =============================================================================
+# database/connection.py - Database Connection Management
+# =============================================================================
+
+import asyncpg
+import logging
+from config.settings import settings
+
+logger = logging.getLogger(__name__)
+
+class DatabaseManager:
+    def __init__(self):
+        self.pool = None
+    
+    async def init_pool(self):
+        """Initialize connection pool and create tables"""
+        try:
+            self.pool = await asyncpg.create_pool(
+                settings.DATABASE_URL,
+                min_size=2,
+                max_size=10
+            )
+            await self.create_tables()
+            await self.insert_default_data()
+            logger.info("Database pool initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize database: {e}")
+            raise
+    
+    async def close_pool(self):
+        """Close the connection pool"""
+        if self.pool:
+            await self.pool.close()
+            logger.info("Database pool closed")
+    
+    async def get_connection(self):
+        """Get a connection from the pool"""
+        if not self.pool:
+            raise RuntimeError("Database pool not initialized")
+        return self.pool.acquire()
+    
+    async def create_tables(self):
+        """Create all necessary tables"""
+        async with self.pool.acquire() as conn:
+            # Create drivers table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS drivers (
+                    driver_id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            
+            # Create driver_availability table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS driver_availability (
+                    id SERIAL PRIMARY KEY,
+                    driver_id INT REFERENCES drivers(driver_id) ON DELETE CASCADE,
+                    date DATE NOT NULL,
+                    available BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE(driver_id, date)
+                );
+            """)
+            
+            # Create routes table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS routes (
+                    route_id SERIAL PRIMARY KEY,
+                    date DATE NOT NULL,
+                    route_name TEXT NOT NULL,
+                    details JSONB,
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            
+            # Create assignments table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS assignments (
+                    id SERIAL PRIMARY KEY,
+                    week_start DATE NOT NULL,
+                    assignments JSONB NOT NULL,
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            
+            logger.info("All tables created successfully")
+    
+    async def insert_default_data(self):
+        """Insert default drivers if none exist"""
+        async with self.pool.acquire() as conn:
+            driver_count = await conn.fetchval("SELECT COUNT(*) FROM drivers")
+            if driver_count == 0:
+                default_drivers = [
+                    ("John Doe",), ("Jane Smith",), 
+                    ("Bob Johnson",), ("Alice Brown",),
+                    ("Mike Wilson",), ("Sarah Davis",)
+                ]
+                await conn.executemany(
+                    "INSERT INTO drivers (name) VALUES ($1)",
+                    default_drivers
+                )
+                logger.info(f"Inserted {len(default_drivers)} default drivers")
+
+# =============================================================================
+# schemas/models.py - Pydantic Models
+# =============================================================================
+
+from pydantic import BaseModel
+from datetime import date, datetime
+from typing import List, Optional, Dict, Any
+
+# Driver Models
+class Driver(BaseModel):
+    driver_id: int
+    name: str
+    created_at: Optional[datetime] = None
+
+class DriverCreate(BaseModel):
+    name: str
+
+# Availability Models
+class DriverAvailabilityUpdate(BaseModel):
+    driver_id: int
+    date: date
+    available: bool
+
+class DriverAvailability(BaseModel):
+    id: int
+    driver_id: int
+    date: date
+    available: bool
+    name: Optional[str] = None
+
+# Route Models
+class RouteCreate(BaseModel):
+    date: date
+    route_name: str
+    details: Optional[Dict[str, Any]] = {}
+
+class RouteUpdate(BaseModel):
+    route_id: Optional[int] = None
+    date: date
+    route_name: str
+    details: Optional[Dict[str, Any]] = {}
+
+class Route(BaseModel):
+    route_id: int
+    date: date
+    route_name: str
+    details: Optional[Dict[str, Any]] = {}
+
+# Scheduling Models
+class WeekUpdate(BaseModel):
+    week_start: date
+
+class Assignment(BaseModel):
+    driver: str
+    route: str
+    hour: str
+    remaining_hour: str
+    date: str
+    status: str = "update"
+
+class GoogleSheetsPayload(BaseModel):
+    drivers: List[Assignment]
+
+# Response Models
+class SuccessResponse(BaseModel):
+    status: str = "success"
+    message: str
+    data: Optional[Any] = None
+
+# =============================================================================
+# services/database.py - Database Service Layer
+# =============================================================================
+
+import json
+from datetime import date, timedelta
+from typing import List, Dict, Any
+import asyncpg
+from schemas.models import Driver, Route, DriverAvailability
+from config.settings import settings
+
+class DatabaseService:
+    def __init__(self, db_manager):
+        self.db_manager = db_manager
+    
+    async def get_drivers(self) -> List[Dict]:
+        """Get all drivers"""
+        async with self.db_manager.get_connection() as conn:
+            rows = await conn.fetch("SELECT * FROM drivers ORDER BY name")
+            return [dict(row) for row in rows]
+    
+    async def get_routes_by_date_range(self, start_date: date, end_date: date) -> List[Dict]:
+        """Get routes within date range"""
+        async with self.db_manager.get_connection() as conn:
+            rows = await conn.fetch("""
+                SELECT * FROM routes 
+                WHERE date BETWEEN $1 AND $2
+                ORDER BY date, route_name
+            """, start_date, end_date)
+            return [dict(row) for row in rows]
+    
+    async def get_availability_by_date_range(self, start_date: date, end_date: date) -> List[Dict]:
+        """Get driver availability within date range"""
+        async with self.db_manager.get_connection() as conn:
+            rows = await conn.fetch("""
+                SELECT da.*, d.name 
+                FROM driver_availability da
+                JOIN drivers d ON da.driver_id = d.driver_id
+                WHERE da.date BETWEEN $1 AND $2
+                ORDER BY da.date, d.name
+            """, start_date, end_date)
+            return [dict(row) for row in rows]
+    
+    async def update_driver_availability(self, driver_id: int, date: date, available: bool):
+        """Update driver availability"""
+        async with self.db_manager.get_connection() as conn:
+            await conn.execute("""
+                INSERT INTO driver_availability (driver_id, date, available)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (driver_id, date) 
+                DO UPDATE SET available = $3
+            """, driver_id, date, available)
+    
+    async def upsert_route(self, route_data: Dict):
+        """Insert or update a route"""
+        async with self.db_manager.get_connection() as conn:
+            if route_data.get('route_id'):
+                await conn.execute("""
+                    UPDATE routes SET route_name = $1, details = $2, date = $3
+                    WHERE route_id = $4
+                """, route_data['route_name'], json.dumps(route_data['details']), 
+                     route_data['date'], route_data['route_id'])
+            else:
+                await conn.execute("""
+                    INSERT INTO routes (date, route_name, details)
+                    VALUES ($1, $2, $3)
+                """, route_data['date'], route_data['route_name'], 
+                     json.dumps(route_data['details']))
+    
+    async def save_assignments(self, week_start: date, assignments: List[Dict]):
+        """Save weekly assignments"""
+        async with self.db_manager.get_connection() as conn:
+            await conn.execute("""
+                DELETE FROM assignments WHERE week_start = $1
+            """, week_start)
+            
+            await conn.execute("""
+                INSERT INTO assignments (week_start, assignments) VALUES ($1, $2)
+            """, week_start, json.dumps(assignments))
+    
+    async def get_unavailable_drivers(self, start_date: date, end_date: date) -> set:
+        """Get set of (driver_id, date) tuples for unavailable drivers"""
+        async with self.db_manager.get_connection() as conn:
+            rows = await conn.fetch("""
+                SELECT driver_id, date 
+                FROM driver_availability 
+                WHERE date BETWEEN $1 AND $2 AND available = FALSE
+            """, start_date, end_date)
+            return {(row['driver_id'], row['date']) for row in rows}
+
+# =============================================================================
+# services/optimizer.py - OR-Tools Scheduling Logic
+# =============================================================================
+
+import logging
+from datetime import date, timedelta
+from typing import List, Dict, Any
+from schemas.models import Assignment
+
+logger = logging.getLogger(__name__)
+
+class SchedulerOptimizer:
+    """OR-Tools based scheduler optimizer"""
+    
+    def __init__(self):
+        self.default_work_hours = "8:30"
+        self.default_remaining_hours = "2:00"
+    
+    def optimize_week(
+        self, 
+        drivers: List[Dict], 
+        routes: List[Dict], 
+        unavailable_drivers: set
+    ) -> List[Assignment]:
+        """
+        Optimize driver assignments for a week
+        
+        Args:
+            drivers: List of available drivers
+            routes: List of routes to be assigned
+            unavailable_drivers: Set of (driver_id, date) tuples for unavailable drivers
+        """
+        assignments = []
+        
+        # Group routes by date
+        routes_by_date = self._group_routes_by_date(routes)
+        
+        logger.info(f"Optimizing {len(routes)} routes across {len(routes_by_date)} days")
+        
+        # Process each day
+        for route_date, date_routes in routes_by_date.items():
+            available_drivers = self._get_available_drivers_for_date(
+                drivers, unavailable_drivers, route_date
+            )
+            
+            if not available_drivers:
+                logger.warning(f"No available drivers for date {route_date}")
+                continue
+            
+            # Simple round-robin assignment (can be enhanced with OR-Tools)
+            day_assignments = self._assign_routes_to_drivers(
+                available_drivers, date_routes, route_date
+            )
+            assignments.extend(day_assignments)
+        
+        logger.info(f"Generated {len(assignments)} assignments")
+        return assignments
+    
+    def _group_routes_by_date(self, routes: List[Dict]) -> Dict[date, List[Dict]]:
+        """Group routes by date"""
+        routes_by_date = {}
+        for route in routes:
+            route_date = route['date']
+            if route_date not in routes_by_date:
+                routes_by_date[route_date] = []
+            routes_by_date[route_date].append(route)
+        return routes_by_date
+    
+    def _get_available_drivers_for_date(
+        self, 
+        drivers: List[Dict], 
+        unavailable_drivers: set, 
+        check_date: date
+    ) -> List[Dict]:
+        """Get drivers available for a specific date"""
+        return [
+            driver for driver in drivers 
+            if (driver['driver_id'], check_date) not in unavailable_drivers
+        ]
+    
+    def _assign_routes_to_drivers(
+        self, 
+        available_drivers: List[Dict], 
+        date_routes: List[Dict], 
+        route_date: date
+    ) -> List[Assignment]:
+        """Assign routes to drivers for a specific date"""
+        assignments = []
+        
+        for i, route in enumerate(date_routes):
+            if available_drivers:
+                driver = available_drivers[i % len(available_drivers)]
+                
+                # Calculate work hours based on route details
+                work_hours = self._calculate_work_hours(route)
+                remaining_hours = self._calculate_remaining_hours(work_hours)
+                
+                assignment = Assignment(
+                    driver=driver['name'],
+                    route=route['route_name'],
+                    hour=work_hours,
+                    remaining_hour=remaining_hours,
+                    date=str(route_date),
+                    status="update"
+                )
+                assignments.append(assignment)
+        
+        return assignments
+    
+    def _calculate_work_hours(self, route: Dict) -> str:
+        """Calculate work hours based on route details"""
+        # This can be enhanced based on route distance, complexity, etc.
+        details = route.get('details', {})
+        distance = details.get('distance_km', 100)
+        
+        # Simple calculation: longer routes take more time
+        if distance > 150:
+            return "9:00"
+        elif distance > 100:
+            return "8:30"
+        else:
+            return "8:00"
+    
+    def _calculate_remaining_hours(self, work_hours: str) -> str:
+        """Calculate remaining hours based on work hours"""
+        # Simple calculation
+        if work_hours == "9:00":
+            return "1:30"
+        elif work_hours == "8:30":
+            return "2:00"
+        else:
+            return "2:30"
+
+# =============================================================================
+# services/google_sheets.py - Google Sheets Integration
+# =============================================================================
+
+import httpx
+import logging
+from typing import List
+from schemas.models import Assignment, GoogleSheetsPayload
+from config.settings import settings
+
+logger = logging.getLogger(__name__)
+
+class GoogleSheetsService:
+    """Service for integrating with Google Cloud Function"""
+    
+    def __init__(self):
+        self.gcf_url = settings.GCF_URL
+        self.timeout = 30.0
+    
+    async def send_assignments(self, assignments: List[Assignment]) -> bool:
+        """
+        Send assignments to Google Cloud Function
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            payload = GoogleSheetsPayload(drivers=assignments)
+            
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    self.gcf_url,
+                    json=payload.dict(),
+                    headers={"Content-Type": "application/json"}
+                )
+                response.raise_for_status()
+                
+            logger.info(f"Successfully sent {len(assignments)} assignments to Google Sheets")
+            return True
+            
+        except httpx.TimeoutException:
+            logger.error("Timeout while sending data to Google Sheets")
+            return False
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error while sending to Google Sheets: {e.response.status_code}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error sending to Google Sheets: {e}")
+            return False
+
+# =============================================================================
+# api/dependencies.py - Shared Dependencies
+# =============================================================================
+
+import asyncpg
+from database.connection import DatabaseManager
+from services.database import DatabaseService
+from services.optimizer import SchedulerOptimizer
+from services.google_sheets import GoogleSheetsService
+
+# Global instances (will be initialized in main.py)
+db_manager = None
+db_service = None
+optimizer = None
+google_sheets_service = None
+
+async def get_db_connection():
+    """Dependency to get database connection"""
+    global db_manager
+    if not db_manager:
+        from main import db_manager as main_db_manager
+        db_manager = main_db_manager
+    
+    async with db_manager.get_connection() as conn:
+        yield conn
+
+def get_db_service():
+    """Dependency to get database service"""
+    global db_service, db_manager
+    if not db_service:
+        from main import db_manager as main_db_manager
+        db_service = DatabaseService(main_db_manager)
+    return db_service
+
+def get_optimizer():
+    """Dependency to get scheduler optimizer"""
+    global optimizer
+    if not optimizer:
+        optimizer = SchedulerOptimizer()
+    return optimizer
+
+def get_google_sheets_service():
+    """Dependency to get Google Sheets service"""
+    global google_sheets_service
+    if not google_sheets_service:
+        google_sheets_service = GoogleSheetsService()
+    return google_sheets_service
+
+# =============================================================================
+# api/routes/health.py - Health Check Routes
+# =============================================================================
+
+from fastapi import APIRouter
+from datetime import datetime
+
+router = APIRouter()
+
+@router.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "service": "Driver Scheduling Backend"
+    }
+
+# =============================================================================
+# api/routes/drivers.py - Driver Routes
+# =============================================================================
+
+from fastapi import APIRouter, Depends, HTTPException
+from typing import List
+from services.database import DatabaseService
+from schemas.models import Driver, SuccessResponse
+from api.dependencies import get_db_service
+
+router = APIRouter()
+
+@router.get("/drivers", response_model=List[Driver])
+async def get_drivers(db_service: DatabaseService = Depends(get_db_service)):
+    """Get all drivers"""
+    try:
+        drivers = await db_service.get_drivers()
+        return drivers
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =============================================================================
+# api/routes/routes.py - Route Management Routes
+# =============================================================================
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from datetime import date
+from typing import List
+from services.database import DatabaseService
+from schemas.models import Route, RouteUpdate, SuccessResponse
+from api.dependencies import get_db_service
+
+router = APIRouter()
+
+@router.get("/routes", response_model=List[Route])
+async def get_routes(
+    start_date: date = Query(...),
+    end_date: date = Query(...),
+    db_service: DatabaseService = Depends(get_db_service)
+):
+    """Get routes by date range"""
+    try:
+        routes = await db_service.get_routes_by_date_range(start_date, end_date)
+        return routes
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/routes", response_model=SuccessResponse)
+async def update_route(
+    route: RouteUpdate,
+    db_service: DatabaseService = Depends(get_db_service)
+):
+    """Add or update a route"""
+    try:
+        await db_service.upsert_route(route.dict())
+        
+        # Trigger week optimization
+        from api.routes.scheduling import trigger_week_optimization
+        await trigger_week_optimization(route.date)
+        
+        return SuccessResponse(message="Route updated and week re-optimized")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =============================================================================
+# api/routes/scheduling.py - Scheduling Routes
+# =============================================================================
+
+from fastapi import APIRouter, Depends, HTTPException
+from datetime import date, timedelta
+from services.database import DatabaseService
+from services.optimizer import SchedulerOptimizer
+from services.google_sheets import GoogleSheetsService
+from schemas.models import (
+    WeekUpdate, DriverAvailabilityUpdate, SuccessResponse
+)
+from api.dependencies import get_db_service, get_optimizer, get_google_sheets_service
+from config.settings import settings
+import logging
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+@router.post("/update-week", response_model=SuccessResponse)
+async def update_week(
+    week_data: WeekUpdate,
+    db_service: DatabaseService = Depends(get_db_service),
+    optimizer: SchedulerOptimizer = Depends(get_optimizer),
+    sheets_service: GoogleSheetsService = Depends(get_google_sheets_service)
+):
+    """Trigger OR-Tools optimization for a given week"""
+    try:
+        week_start = week_data.week_start
+        week_end = week_start + timedelta(days=settings.WEEK_DAYS-1)
+        
+        logger.info(f"Updating week: {week_start} to {week_end}")
+        
+        # Fetch data
+        drivers = await db_service.get_drivers()
+        routes = await db_service.get_routes_by_date_range(week_start, week_end)
+        unavailable_drivers = await db_service.get_unavailable_drivers(week_start, week_end)
+        
+        logger.info(f"Drivers: {len(drivers)}, Routes: {len(routes)}, Unavailable: {len(unavailable_drivers)}")
+        
+        # Run optimization
+        assignments = optimizer.optimize_week(drivers, routes, unavailable_drivers)
+        
+        # Save assignments
+        await db_service.save_assignments(week_start, [a.dict() for a in assignments])
+        
+        # Send to Google Sheets
+        sheets_success = await sheets_service.send_assignments(assignments)
+        if not sheets_success:
+            logger.warning("Failed to update Google Sheets, but optimization completed")
+        
+        return SuccessResponse(
+            message=f"Week {week_start} optimized and updated",
+            data={"assignments_count": len(assignments), "sheets_updated": sheets_success}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error updating week: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/update-driver-availability", response_model=SuccessResponse)
+async def update_driver_availability(
+    availability: DriverAvailabilityUpdate,
+    db_service: DatabaseService = Depends(get_db_service)
+):
+    """Update driver availability and trigger re-optimization"""
+    try:
+        await db_service.update_driver_availability(
+            availability.driver_id, availability.date, availability.available
+        )
+        
+        logger.info(f"Updated availability for driver {availability.driver_id} on {availability.date}")
+        
+        # Trigger week update
+        week_start = availability.date - timedelta(days=availability.date.weekday())
+        await trigger_week_optimization(week_start)
+        
+        return SuccessResponse(message="Driver availability updated and week re-optimized")
+        
+    except Exception as e:
+        logger.error(f"Error updating driver availability: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def trigger_week_optimization(target_date: date):
+    """Helper function to trigger week optimization"""
+    from api.dependencies import get_db_service, get_optimizer, get_google_sheets_service
+    
+    week_start = target_date - timedelta(days=target_date.weekday())
+    week_data = WeekUpdate(week_start=week_start)
+    
+    await update_week(
+        week_data, 
+        get_db_service(), 
+        get_optimizer(), 
+        get_google_sheets_service()
+    )
