@@ -86,6 +86,14 @@ class DriverSchedulingClient:
         }
         return self._make_request("POST", "/api/v1/assistant/add-single-route", data)
     
+    def remove_route(self, route_name: str, date: str) -> Dict[str, Any]:
+        """Remove a route and rerun optimization"""
+        data = {
+            "route_name": route_name,
+            "date": date
+        }
+        return self._make_request("POST", "/api/v1/assistant/remove-route", data)
+    
     def add_route(self, route_name: str, date: str, duration_hours: float, 
                   day_of_week: str, week_start: str, route_type: str = "regular") -> Dict[str, Any]:
         """Add new route and rerun optimization"""
@@ -205,6 +213,33 @@ def add_new_route(route_name: str, date: str, duration_hours: float, day_of_week
     """Add a new route to the system and reoptimize"""
     client = DriverSchedulingClient()
     result = client.add_single_route(route_name, date, duration_hours)
+
+
+def remove_route(route_name: str, date: str):
+    """Remove a route from the system and reoptimize"""
+    client = DriverSchedulingClient()
+    result = client.remove_route(route_name, date)
+    
+    if "error" in result:
+        return f"❌ Route Removal Failed: {result['error']}"
+    
+    if result.get("status") == "success":
+        route_info = result.get('route_removed', {})
+        return f"""✅ Route Removed Successfully!
+        
+📊 Removed Route Details:
+• Route Name: {route_info.get('name', route_name)}
+• Date: {route_info.get('date', date)}  
+• Route ID: {route_info.get('id', 'N/A')}
+
+📊 System Update Results:
+• Total Assignments: {result.get('total_assignments', 0)} (after removal)
+• Total Routes: {result.get('total_routes', 0)} routes remaining in system
+• Google Sheets: {'✅ Updated' if result.get('google_sheets_updated') else '❌ Update Failed'}
+
+The route has been removed and the system reoptimized with updated assignments."""
+    
+    return f"❌ Route removal failed: Route not found or system error"
     
     if "error" in result:
         return f"❌ Route Addition Failed: {result['error']}"
@@ -241,6 +276,7 @@ def handle_scheduling_request(action: str, **kwargs) -> str:
     - "optimize": Run weekly optimization
     - "update_availability": Update driver availability
     - "add_route": Add new route
+    - "remove_route": Remove existing route
     """
     
     action = action.lower().strip()
@@ -276,6 +312,15 @@ def handle_scheduling_request(action: str, **kwargs) -> str:
         
         return add_new_route(route_name, date, duration_hours, day_of_week)
     
+    elif action == "remove_route":
+        route_name = kwargs.get("route_name", "")
+        date = kwargs.get("date", "")
+        
+        if not route_name or not date:
+            return "❌ Error: route_name and date are required for removing routes"
+        
+        return remove_route(route_name, date)
+    
     else:
         return f"""❌ Unknown action: {action}
         
@@ -285,6 +330,7 @@ Available actions:
 • "optimize" - Run weekly optimization  
 • "update_availability" - Update driver availability
 • "add_route" - Add new route
+• "remove_route" - Remove existing route
 
 Example usage:
 handle_scheduling_request("status")

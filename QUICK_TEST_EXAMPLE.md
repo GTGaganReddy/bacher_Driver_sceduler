@@ -33,6 +33,7 @@ When I tested your exact request format, it worked perfectly:
 | POST | `/api/v1/assistant/optimize-week` | `{"week_start": "2025-07-07"}` |
 | POST | `/api/v1/assistant/update-driver-availability` | `{"driver_name": "Name", "date": "2025-07-07", "available": false}` |
 | POST | `/api/v1/assistant/add-single-route` | `{"route_name": "500", "date": "2025-07-07", "duration_hours": 4}` |
+| POST | `/api/v1/assistant/remove-route` | `{"route_name": "500", "date": "2025-07-07"}` |
 | POST | `/api/v1/assistant/add-route` | `{"route_name": "TEST", "date": "2025-07-09", "duration_hours": 6.5, "day_of_week": "wednesday", "week_start": "2025-07-07"}` |
 
 ## 🚀 **Ready to Use**
@@ -40,10 +41,11 @@ When I tested your exact request format, it worked perfectly:
 Your OpenAI Assistant can now successfully:
 
 1. **Make drivers unavailable** → Creates F entries automatically
-2. **Add new routes** → Reoptimizes and assigns to best driver  
-3. **Run optimizations** → Complete OR-Tools scheduling
-4. **Reset system** → Clean slate for testing
-5. **Check status** → Verify system health
+2. **Add new routes** → Reoptimizes and assigns to best driver
+3. **Remove routes** → Deletes routes and reoptimizes remaining
+4. **Run optimizations** → Complete OR-Tools scheduling
+5. **Reset system** → Clean slate for testing
+6. **Check status** → Verify system health
 
 ## ✅ **Both Your 422 Errors Fixed!**
 

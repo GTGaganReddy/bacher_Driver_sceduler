@@ -50,6 +50,11 @@ class AddSingleRouteRequest(BaseModel):
     duration_hours: float = Field(..., description="Duration in hours")
 
 
+class RemoveRouteRequest(BaseModel):
+    route_name: str = Field(..., description="Route name to remove (e.g., '500')")
+    date: str = Field(..., description="Route date (YYYY-MM-DD)")
+
+
 @router.post("/optimize-week")
 async def optimize_week(request: WeeklyOptimizationRequest):
     """Complete weekly optimization: DB -> OR-Tools -> Google Sheets"""
@@ -281,6 +286,70 @@ async def add_single_route(request: AddSingleRouteRequest):
         
     except Exception as e:
         logger.error(f"Single route addition failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/remove-route")
+async def remove_route(request: RemoveRouteRequest):
+    """Remove a route and rerun optimization"""
+    try:
+        logger.info(f"Assistant API: Removing route {request.route_name} from {request.date}")
+        
+        db_service = DatabaseService(db_manager)
+        sheets_service = GoogleSheetsService()
+        
+        # Convert date string to date object
+        route_date = datetime.strptime(request.date, "%Y-%m-%d").date()
+        
+        # Remove the route from database
+        async with db_manager.get_connection() as conn:
+            deleted_route = await conn.fetchrow(
+                "DELETE FROM routes WHERE route_name = $1 AND date = $2 RETURNING route_id",
+                request.route_name, route_date
+            )
+            
+            if not deleted_route:
+                raise HTTPException(status_code=404, detail=f"Route '{request.route_name}' on {request.date} not found")
+            
+            logger.info(f"Deleted route {request.route_name} (ID: {deleted_route['route_id']}) from {request.date}")
+        
+        # Get fresh data and reoptimize
+        week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
+        week_end = week_start + timedelta(days=6)
+        
+        drivers = await db_service.get_drivers()
+        routes = await db_service.get_routes_by_date_range(week_start, week_end)
+        availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        
+        optimization_result = run_ortools_optimization(drivers, routes, availability)
+        
+        # Update Google Sheets
+        week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+        sheets_result = await sheets_service.update_sheet(
+            optimization_result,
+            all_drivers=drivers,
+            all_dates=week_dates
+        )
+        sheets_success = sheets_result is not None
+        
+        # Save results
+        assignments = optimization_result.get('assignments', {})
+        await db_service.save_assignments(week_start, list(assignments.values()))
+        
+        return {
+            "status": "success",
+            "route_removed": {
+                "name": request.route_name,
+                "date": request.date,
+                "id": deleted_route['route_id']
+            },
+            "total_assignments": sum(len(day_assignments) for day_assignments in assignments.values()),
+            "total_routes": len(routes),
+            "google_sheets_updated": sheets_success
+        }
+        
+    except Exception as e:
+        logger.error(f"Route removal failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

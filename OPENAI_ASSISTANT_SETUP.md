@@ -28,7 +28,7 @@ Copy the entire `openai_assistant_action.py` content into your OpenAI Assistant 
 
 ## 📋 Available Endpoints
 
-Your system now supports **5 main operations**:
+Your system now supports **7 main operations**:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -37,7 +37,9 @@ Your system now supports **5 main operations**:
 | `/api/v1/assistant/optimize-week` | POST | Run weekly optimization |
 | `/api/v1/assistant/update-availability` | POST | Update driver availability (advanced) |
 | `/api/v1/assistant/update-driver-availability` | POST | **NEW!** Simple single driver update |
-| `/api/v1/assistant/add-route` | POST | Add new route and reoptimize |
+| `/api/v1/assistant/add-single-route` | POST | **NEW!** Simple route addition |
+| `/api/v1/assistant/remove-route` | POST | **NEW!** Remove existing route |
+| `/api/v1/assistant/add-route` | POST | Add new route and reoptimize (advanced) |
 
 ## 🎯 Usage Examples
 
@@ -76,6 +78,31 @@ handle_scheduling_request(
 - Creates F entry in Google Sheets (route="F", hour="0:00")
 - Reoptimizes entire week automatically
 - **Now supports both simple and advanced request formats**
+
+### **Add New Route** ⚡ **WORKING REQUEST FORMAT**
+```json
+{
+  "route_name": "500",
+  "date": "2025-07-09", 
+  "duration_hours": 6.5
+}
+```
+- Adds new route to specified date
+- Runs complete OR-Tools reoptimization  
+- Assigns route to optimal driver
+- Updates Google Sheets with new assignments
+
+### **Remove Route** ⚡ **NEW FUNCTIONALITY**
+```json
+{
+  "route_name": "500",
+  "date": "2025-07-09"
+}
+```
+- Removes existing route from specified date
+- Runs complete OR-Tools reoptimization  
+- Redistributes assignments among remaining routes
+- Updates Google Sheets with revised assignments
 
 ### **Add New Route**
 ```python
