@@ -77,6 +77,15 @@ class DriverSchedulingClient:
         }
         return self._make_request("POST", "/api/v1/assistant/update-driver-availability", data)
     
+    def add_single_route(self, route_name: str, date: str, duration_hours: float) -> Dict[str, Any]:
+        """Simplified method to add single route"""
+        data = {
+            "route_name": route_name,
+            "date": date,
+            "duration_hours": duration_hours
+        }
+        return self._make_request("POST", "/api/v1/assistant/add-single-route", data)
+    
     def add_route(self, route_name: str, date: str, duration_hours: float, 
                   day_of_week: str, week_start: str, route_type: str = "regular") -> Dict[str, Any]:
         """Add new route and rerun optimization"""
@@ -194,15 +203,8 @@ The system has been reoptimized with the new availability and results exported t
 
 def add_new_route(route_name: str, date: str, duration_hours: float, day_of_week: str = None):
     """Add a new route to the system and reoptimize"""
-    week_start = get_july_week_2025()
-    
-    # Auto-determine day of week if not provided
-    if not day_of_week:
-        date_obj = datetime.strptime(date, '%Y-%m-%d')
-        day_of_week = date_obj.strftime('%A').lower()
-    
     client = DriverSchedulingClient()
-    result = client.add_route(route_name, date, duration_hours, day_of_week, week_start)
+    result = client.add_single_route(route_name, date, duration_hours)
     
     if "error" in result:
         return f"❌ Route Addition Failed: {result['error']}"

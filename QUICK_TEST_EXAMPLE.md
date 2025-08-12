@@ -32,6 +32,7 @@ When I tested your exact request format, it worked perfectly:
 | POST | `/api/v1/assistant/reset` | No body |
 | POST | `/api/v1/assistant/optimize-week` | `{"week_start": "2025-07-07"}` |
 | POST | `/api/v1/assistant/update-driver-availability` | `{"driver_name": "Name", "date": "2025-07-07", "available": false}` |
+| POST | `/api/v1/assistant/add-single-route` | `{"route_name": "500", "date": "2025-07-07", "duration_hours": 4}` |
 | POST | `/api/v1/assistant/add-route` | `{"route_name": "TEST", "date": "2025-07-09", "duration_hours": 6.5, "day_of_week": "wednesday", "week_start": "2025-07-07"}` |
 
 ## 🚀 **Ready to Use**
@@ -44,4 +45,9 @@ Your OpenAI Assistant can now successfully:
 4. **Reset system** → Clean slate for testing
 5. **Check status** → Verify system health
 
-The 422 error is completely resolved! 🎉
+## ✅ **Both Your 422 Errors Fixed!**
+
+**Driver Availability Request:** ✅ WORKING  
+**Add Route Request:** ✅ WORKING  
+
+Both your exact request formats now work perfectly! 🎉

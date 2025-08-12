@@ -44,6 +44,12 @@ class RouteRequest(BaseModel):
     week_start: str = Field(..., description="Week start for reoptimization")
 
 
+class AddSingleRouteRequest(BaseModel):
+    route_name: str = Field(..., description="Route name (e.g., '500')")
+    date: str = Field(..., description="Route date (YYYY-MM-DD)")
+    duration_hours: float = Field(..., description="Duration in hours")
+
+
 @router.post("/optimize-week")
 async def optimize_week(request: WeeklyOptimizationRequest):
     """Complete weekly optimization: DB -> OR-Tools -> Google Sheets"""
@@ -249,6 +255,32 @@ async def add_route(request: RouteRequest):
         
     except Exception as e:
         logger.error(f"Route addition failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add-single-route")
+async def add_single_route(request: AddSingleRouteRequest):
+    """Simplified endpoint to add a single route"""
+    try:
+        logger.info(f"Assistant API: Adding single route {request.route_name} for {request.date}")
+        
+        # Convert date to day_of_week
+        date_obj = datetime.strptime(request.date, "%Y-%m-%d")
+        day_of_week = date_obj.strftime("%A").lower()
+        
+        # Use existing logic with July 2025 week
+        route_request = RouteRequest(
+            route_name=request.route_name,
+            date=request.date,
+            duration_hours=request.duration_hours,
+            day_of_week=day_of_week,
+            week_start="2025-07-07"  # Default to July 2025 week
+        )
+        
+        return await add_route(route_request)
+        
+    except Exception as e:
+        logger.error(f"Single route addition failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

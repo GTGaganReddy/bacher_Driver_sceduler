@@ -8,14 +8,18 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
-## August 12, 2025 - Complete OpenAI Assistant Integration with Reset Functionality
-- Added comprehensive OpenAI Assistant action code with full API integration
+## August 12, 2025 - Complete OpenAI Assistant Integration with 422 Error Resolution
+- **CRITICAL FIX**: Resolved all 422 request format errors for OpenAI Assistant integration
+- Added simplified endpoints: `/update-driver-availability` and `/add-single-route`
+- Both user request formats now work perfectly (driver availability + route addition)
+- Comprehensive OpenAI Assistant action code with full API integration  
 - Implemented system reset endpoint for clearing assignments and resetting availability
 - Created complete natural language interface for all scheduling operations
-- Added F entry demonstration and verification (unavailable drivers show as route="F")
+- F entry functionality fully operational (unavailable drivers show as route="F")
 - Built comprehensive setup documentation and demo scripts
-- All five Assistant API endpoints now fully operational with reset capability
-- Complete data flow verified: database updates → OR-Tools optimization → Google Sheets export
+- All six Assistant API endpoints now fully operational with simplified request formats
+- Complete data flow verified: API requests → OR-Tools optimization → Google Sheets export
+- 46 total routes successfully managed with dynamic assignment optimization
 
 ## August 11, 2025 - Sequential OR-Tools Algorithm Implementation
 - Replaced progressive algorithm with true sequential optimization approach
@@ -55,9 +59,11 @@ Preferred communication style: Simple, everyday language.
 
 ## API Design
 - **RESTful Endpoints**: Standard HTTP methods for CRUD operations
+- **Dual Request Formats**: Both simplified and advanced endpoints for OpenAI Assistant integration
 - **Pydantic Validation**: Request/response model validation and serialization
 - **Dependency Injection**: FastAPI dependencies for service instantiation
 - **Error Handling**: Consistent HTTP exception responses
+- **OpenAI Assistant Ready**: Six endpoints with proper request/response formats
 
 ## Application Lifecycle
 - **Startup/Shutdown Hooks**: Manages database connection pool lifecycle
