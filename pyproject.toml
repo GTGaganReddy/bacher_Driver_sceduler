@@ -7,6 +7,7 @@ dependencies = [
     "asyncpg>=0.30.0",
     "fastapi>=0.116.1",
     "httpx>=0.28.1",
+    "openai>=1.99.8",
     "ortools>=9.14.6206",
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",

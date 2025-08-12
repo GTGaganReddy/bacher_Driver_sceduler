@@ -225,6 +225,57 @@ async def add_route(request: RouteRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/reset")
+async def reset_system():
+    """Reset system to initial state - clear assignments and reset availability"""
+    try:
+        logger.info("Assistant API: Resetting system to initial state")
+        
+        db_service = DatabaseService(db_manager)
+        
+        # Clear all assignments
+        async with db_manager.get_connection() as conn:
+            await conn.execute("DELETE FROM assignments")
+            logger.info("Cleared all assignments")
+            
+            # Reset all driver availability to true (available) for July 7-13, 2025
+            # Keep Sunday (2025-07-13) as unavailable for all drivers
+            await conn.execute("""
+                UPDATE driver_availability 
+                SET available = true 
+                WHERE date BETWEEN '2025-07-07' AND '2025-07-12'
+            """)
+            
+            # Ensure Sunday remains unavailable for all drivers
+            await conn.execute("""
+                UPDATE driver_availability 
+                SET available = false 
+                WHERE date = '2025-07-13'
+            """)
+            
+            logger.info("Reset driver availability - weekdays available, Sunday unavailable")
+        
+        # Get fresh data for verification
+        drivers = await db_service.get_drivers()
+        routes = await db_service.get_routes_by_date_range(
+            datetime.strptime('2025-07-07', '%Y-%m-%d').date(),
+            datetime.strptime('2025-07-13', '%Y-%m-%d').date()
+        )
+        
+        return {
+            "status": "success",
+            "message": "System reset to initial state",
+            "drivers_count": len(drivers),
+            "routes_count": len(routes),
+            "assignments_cleared": True,
+            "availability_reset": True
+        }
+        
+    except Exception as e:
+        logger.error(f"System reset failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Reset failed: {str(e)}")
+
+
 @router.get("/status")
 async def get_status():
     """System status check"""

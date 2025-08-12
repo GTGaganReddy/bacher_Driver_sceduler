@@ -8,6 +8,15 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+## August 12, 2025 - Complete OpenAI Assistant Integration with Reset Functionality
+- Added comprehensive OpenAI Assistant action code with full API integration
+- Implemented system reset endpoint for clearing assignments and resetting availability
+- Created complete natural language interface for all scheduling operations
+- Added F entry demonstration and verification (unavailable drivers show as route="F")
+- Built comprehensive setup documentation and demo scripts
+- All five Assistant API endpoints now fully operational with reset capability
+- Complete data flow verified: database updates → OR-Tools optimization → Google Sheets export
+
 ## August 11, 2025 - Sequential OR-Tools Algorithm Implementation
 - Replaced progressive algorithm with true sequential optimization approach
 - Day-by-day chronological processing: solves each date independently in order
