@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from services.database import DatabaseService
 from services.google_sheets import GoogleSheetsService
-from services.optimizer import run_ortools_optimization
+from services.optimizer import run_ortools_optimization, SchedulingOptimizer
 from api.dependencies import db_manager
 
 logger = logging.getLogger(__name__)
@@ -399,14 +399,58 @@ async def reset_system():
             datetime.strptime('2025-07-13', '%Y-%m-%d').date()
         )
         
+        # Run optimization with reset state and update Google Sheets
+        optimizer = SchedulingOptimizer()
+        sheets_service = GoogleSheetsService()
+        
+        # Get driver availability for the reset state
+        availability = await db_service.get_availability_by_date_range(
+            datetime.strptime('2025-07-07', '%Y-%m-%d').date(),
+            datetime.strptime('2025-07-13', '%Y-%m-%d').date()
+        )
+        
+        if routes:
+            # Run optimization with current reset state
+            optimization_result = optimizer.optimize_schedule(drivers, routes, availability)
+            
+            # Update Google Sheets with reset state
+            week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
+            week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+            sheets_result = await sheets_service.update_sheet(
+                optimization_result,
+                all_drivers=drivers,
+                all_dates=week_dates
+            )
+            sheets_updated = sheets_result is not None
+            
+            # Save optimization results
+            assignments = optimization_result.get('assignments', {})
+            await db_service.save_assignments(week_start, list(assignments.values()))
+            
+            logger.info(f"Reset complete: optimized {len(routes)} routes, updated sheets: {sheets_updated}")
+        else:
+            # No routes - just clear sheets with empty data
+            week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
+            week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+            empty_result = {"assignments": {}, "stats": {"total_routes": 0, "assigned_routes": 0}}
+            sheets_result = await sheets_service.update_sheet(
+                empty_result,
+                all_drivers=drivers,
+                all_dates=week_dates
+            )
+            sheets_updated = sheets_result is not None
+            logger.info(f"Reset complete: no routes to optimize, cleared sheets: {sheets_updated}")
+        
         return {
             "status": "success",
-            "message": "System reset to initial state",
+            "message": "System reset to initial state and optimization completed",
             "drivers_count": len(drivers),
             "routes_count": len(routes),
             "assignments_cleared": True,
             "availability_reset": True,
-            "routes_reset": True
+            "routes_reset": True,
+            "optimization_run": True,
+            "sheets_updated": sheets_updated
         }
         
     except Exception as e:

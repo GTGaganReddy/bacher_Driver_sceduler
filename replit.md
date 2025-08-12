@@ -8,12 +8,13 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
-## August 12, 2025 - Reset Function Fix & Data Consistency Enhancement
-- **CRITICAL FIX**: Fixed reset function to properly clear both routes and driver availability
-- **Route reset logic**: Now removes manually added routes while preserving original system data
-- **Consistent state management**: Reset function maintains data integrity across all tables
-- **Timestamp-based filtering**: Only clears routes added after initial system setup
-- **Complete reset workflow**: Assignments, routes, and availability all reset consistently
+## August 12, 2025 - Complete Reset Function Enhancement with Auto-Optimization
+- **CRITICAL FIX**: Enhanced reset function for complete workflow automation
+- **Full data reset**: Clears assignments, routes, and resets driver availability consistently
+- **Auto-optimization**: Automatically runs OR-Tools optimization after database reset
+- **Google Sheets sync**: Updates sheets with optimized reset state via Google Cloud Function
+- **Smart route preservation**: Only removes manually added routes while keeping original system data
+- **Complete workflow**: Reset → Optimize → Update Sheets in single operation
 
 ## August 12, 2025 - Complete Deployment Fix & Health Check Enhancement
 - **CRITICAL DEPLOYMENT FIX**: Applied all suggested fixes for Cloud Run deployment failures
