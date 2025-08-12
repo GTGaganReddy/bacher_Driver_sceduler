@@ -33,9 +33,10 @@ Your system now supports **5 main operations**:
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/v1/assistant/status` | GET | Check system health |
-| `/api/v1/assistant/reset` | POST | **NEW!** Reset system to initial state |
+| `/api/v1/assistant/reset` | POST | Reset system to initial state |
 | `/api/v1/assistant/optimize-week` | POST | Run weekly optimization |
-| `/api/v1/assistant/update-availability` | POST | Update driver availability (F entries) |
+| `/api/v1/assistant/update-availability` | POST | Update driver availability (advanced) |
+| `/api/v1/assistant/update-driver-availability` | POST | **NEW!** Simple single driver update |
 | `/api/v1/assistant/add-route` | POST | Add new route and reoptimize |
 
 ## 🎯 Usage Examples
@@ -54,8 +55,16 @@ handle_scheduling_request("reset")
 - Resets all drivers to available (except Sunday)
 - Returns system to clean initial state
 
-### **Update Driver Availability (F Entries)**
+### **Update Driver Availability (F Entries)** ⚡ **FIXED REQUEST FORMAT**
 ```python
+# Direct API call format (what you should use):
+{
+  "driver_name": "Genäuß, Thomas",
+  "date": "2025-07-07",
+  "available": false
+}
+
+# Or using the action function:
 handle_scheduling_request(
     "update_availability", 
     driver_name="Fröhlacher, Hubert", 
@@ -66,6 +75,7 @@ handle_scheduling_request(
 - Makes driver unavailable on specified date
 - Creates F entry in Google Sheets (route="F", hour="0:00")
 - Reoptimizes entire week automatically
+- **Now supports both simple and advanced request formats**
 
 ### **Add New Route**
 ```python

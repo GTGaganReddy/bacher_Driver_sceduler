@@ -68,6 +68,15 @@ class DriverSchedulingClient:
         }
         return self._make_request("POST", "/api/v1/assistant/update-availability", data)
     
+    def update_single_driver_availability(self, driver_name: str, date: str, available: bool) -> Dict[str, Any]:
+        """Simplified method to update single driver availability"""
+        data = {
+            "driver_name": driver_name,
+            "date": date,
+            "available": available
+        }
+        return self._make_request("POST", "/api/v1/assistant/update-driver-availability", data)
+    
     def add_route(self, route_name: str, date: str, duration_hours: float, 
                   day_of_week: str, week_start: str, route_type: str = "regular") -> Dict[str, Any]:
         """Add new route and rerun optimization"""
@@ -160,12 +169,8 @@ All driver-route assignments have been optimized and exported to Google Sheets."
 
 def update_driver_availability(driver_name: str, date: str, available: bool):
     """Update a driver's availability for a specific date"""
-    week_start = get_july_week_2025()
-    
-    availability_updates = [{"date": date, "available": available}]
-    
     client = DriverSchedulingClient()
-    result = client.update_driver_availability(driver_name, availability_updates, week_start)
+    result = client.update_single_driver_availability(driver_name, date, available)
     
     if "error" in result:
         return f"❌ Availability Update Failed: {result['error']}"

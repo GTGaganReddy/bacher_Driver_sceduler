@@ -29,6 +29,12 @@ class AvailabilityUpdateRequest(BaseModel):
     week_start: str = Field(..., description="Week start for reoptimization")
 
 
+class SimpleAvailabilityUpdateRequest(BaseModel):
+    driver_name: str = Field(..., description="Driver name from database")
+    date: str = Field(..., description="Date in YYYY-MM-DD format")
+    available: bool = Field(..., description="True if available, False if unavailable")
+
+
 class RouteRequest(BaseModel):
     route_name: str = Field(..., description="Route name (e.g., '431oS')")
     date: str = Field(..., description="Route date (YYYY-MM-DD)")
@@ -160,6 +166,27 @@ async def update_availability(request: AvailabilityUpdateRequest):
         
     except Exception as e:
         logger.error(f"Availability update failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/update-driver-availability")
+async def update_single_driver_availability(request: SimpleAvailabilityUpdateRequest):
+    """Simplified endpoint: Update single driver availability -> Rerun optimization -> Update sheets"""
+    try:
+        logger.info(f"Assistant API: Simple update for {request.driver_name} on {request.date}")
+        
+        # Convert to the format expected by the main update_availability function
+        availability_request = AvailabilityUpdateRequest(
+            driver_name=request.driver_name,
+            updates=[{"date": request.date, "available": request.available}],
+            week_start="2025-07-07"  # Default to July 2025 week
+        )
+        
+        # Call the main availability update function
+        return await update_availability(availability_request)
+        
+    except Exception as e:
+        logger.error(f"Simple availability update failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
