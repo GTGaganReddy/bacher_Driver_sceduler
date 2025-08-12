@@ -1,0 +1,242 @@
+"""
+Assistant API endpoints for external integrations.
+Provides complete workflow: DB operations -> OR-Tools optimization -> Google Sheets update.
+"""
+
+from fastapi import APIRouter, HTTPException
+from datetime import datetime, timedelta
+from typing import Dict, Any, List
+import logging
+from pydantic import BaseModel, Field
+
+from services.database import DatabaseService
+from services.google_sheets import GoogleSheetsService
+from services.optimizer import run_ortools_optimization
+from api.dependencies import db_manager
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/v1/assistant", tags=["Assistant API"])
+
+
+# Request Models
+class WeeklyOptimizationRequest(BaseModel):
+    week_start: str = Field(..., description="Week start date (YYYY-MM-DD)")
+
+
+class AvailabilityUpdateRequest(BaseModel):
+    driver_name: str = Field(..., description="Driver name from database")
+    updates: List[Dict[str, Any]] = Field(..., description="Date/availability updates")
+    week_start: str = Field(..., description="Week start for reoptimization")
+
+
+class RouteRequest(BaseModel):
+    route_name: str = Field(..., description="Route name (e.g., '431oS')")
+    date: str = Field(..., description="Route date (YYYY-MM-DD)")
+    duration_hours: float = Field(..., description="Duration in hours")
+    route_type: str = Field(default="regular")
+    day_of_week: str = Field(..., description="Day of week")
+    week_start: str = Field(..., description="Week start for reoptimization")
+
+
+@router.post("/optimize-week")
+async def optimize_week(request: WeeklyOptimizationRequest):
+    """Complete weekly optimization: DB -> OR-Tools -> Google Sheets"""
+    try:
+        logger.info(f"Assistant API: Weekly optimization for {request.week_start}")
+        
+        week_start = datetime.strptime(request.week_start, '%Y-%m-%d').date()
+        week_end = week_start + timedelta(days=6)
+        
+        db_service = DatabaseService(db_manager)
+        sheets_service = GoogleSheetsService()
+        
+        # Fetch all data
+        drivers = await db_service.get_drivers()
+        routes = await db_service.get_routes_by_date_range(week_start, week_end)
+        availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        
+        if not drivers or not routes:
+            raise HTTPException(status_code=404, detail="Missing drivers or routes data")
+        
+        # Run OR-Tools optimization
+        optimization_result = run_ortools_optimization(drivers, routes, availability)
+        
+        # Generate complete driver grid for Google Sheets
+        week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+        
+        # Update Google Sheets with complete driver grid
+        sheets_result = await sheets_service.update_sheet(
+            optimization_result,
+            all_drivers=drivers,
+            all_dates=week_dates
+        )
+        sheets_success = sheets_result is not None  # Success if result returned
+        
+        # Save results to database
+        assignments = optimization_result.get('assignments', {})
+        await db_service.save_assignments(week_start, list(assignments.values()))
+        
+        return {
+            "status": "success",
+            "week_start": request.week_start,
+            "total_assignments": sum(len(day_assignments) for day_assignments in assignments.values()),
+            "total_routes": len(routes),
+            "google_sheets_updated": sheets_success,
+            "solver_status": optimization_result.get('solver_status')
+        }
+        
+    except Exception as e:
+        logger.error(f"Weekly optimization failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/update-availability")
+async def update_availability(request: AvailabilityUpdateRequest):
+    """Update driver availability -> Rerun optimization -> Update sheets"""
+    try:
+        logger.info(f"Assistant API: Updating availability for {request.driver_name}")
+        
+        week_start = datetime.strptime(request.week_start, '%Y-%m-%d').date()
+        week_end = week_start + timedelta(days=6)
+        
+        db_service = DatabaseService(db_manager)
+        sheets_service = GoogleSheetsService()
+        
+        # Find driver by name
+        drivers = await db_service.get_drivers()
+        target_driver = None
+        for driver in drivers:
+            if driver['name'] == request.driver_name:
+                target_driver = driver
+                break
+        
+        if not target_driver:
+            raise HTTPException(status_code=404, detail=f"Driver '{request.driver_name}' not found")
+        
+        # Update availability in database
+        driver_id = target_driver['driver_id']
+        updates_made = 0
+        
+        for update in request.updates:
+            try:
+                update_date = datetime.strptime(update['date'], '%Y-%m-%d').date()
+                available = update['available']
+                await db_service.update_driver_availability(driver_id, update_date, available)
+                updates_made += 1
+                logger.info(f"Updated {request.driver_name} availability on {update_date}: {available}")
+            except (ValueError, KeyError) as e:
+                logger.warning(f"Invalid update: {e}")
+                continue
+        
+        if updates_made == 0:
+            raise HTTPException(status_code=400, detail="No valid updates processed")
+        
+        # Rerun complete optimization
+        routes = await db_service.get_routes_by_date_range(week_start, week_end)
+        availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        
+        optimization_result = run_ortools_optimization(drivers, routes, availability)
+        
+        # Update Google Sheets
+        week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+        sheets_result = await sheets_service.update_sheet(
+            optimization_result,
+            all_drivers=drivers,
+            all_dates=week_dates
+        )
+        sheets_success = sheets_result is not None
+        
+        # Save results
+        assignments = optimization_result.get('assignments', {})
+        await db_service.save_assignments(week_start, list(assignments.values()))
+        
+        return {
+            "status": "success",
+            "driver_updated": request.driver_name,
+            "updates_applied": updates_made,
+            "total_assignments": sum(len(day_assignments) for day_assignments in assignments.values()),
+            "google_sheets_updated": sheets_success
+        }
+        
+    except Exception as e:
+        logger.error(f"Availability update failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add-route")
+async def add_route(request: RouteRequest):
+    """Add new route -> Rerun optimization -> Update sheets"""
+    try:
+        logger.info(f"Assistant API: Adding route {request.route_name} for {request.date}")
+        
+        route_date = datetime.strptime(request.date, '%Y-%m-%d').date()
+        week_start = datetime.strptime(request.week_start, '%Y-%m-%d').date()
+        week_end = week_start + timedelta(days=6)
+        
+        db_service = DatabaseService(db_manager)
+        sheets_service = GoogleSheetsService()
+        
+        # Create route details for database
+        route_details = {
+            "route_code": request.route_name,
+            "duration": f"{int(request.duration_hours)}:{int((request.duration_hours % 1) * 60):02d}",
+            "type": request.route_type
+        }
+        
+        # Add route to database
+        route_id = await db_service.create_route(route_date, request.route_name, route_details)
+        logger.info(f"Created route {request.route_name} with ID {route_id}")
+        
+        # Rerun complete optimization with new route
+        drivers = await db_service.get_drivers()
+        routes = await db_service.get_routes_by_date_range(week_start, week_end)
+        availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        
+        optimization_result = run_ortools_optimization(drivers, routes, availability)
+        
+        # Update Google Sheets
+        week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+        sheets_result = await sheets_service.update_sheet(
+            optimization_result,
+            all_drivers=drivers,
+            all_dates=week_dates
+        )
+        sheets_success = sheets_result is not None
+        
+        # Save results
+        assignments = optimization_result.get('assignments', {})
+        await db_service.save_assignments(week_start, list(assignments.values()))
+        
+        return {
+            "status": "success",
+            "route_added": {
+                "id": route_id,
+                "name": request.route_name,
+                "date": request.date,
+                "duration_hours": request.duration_hours
+            },
+            "total_assignments": sum(len(day_assignments) for day_assignments in assignments.values()),
+            "total_routes": len(routes),
+            "google_sheets_updated": sheets_success
+        }
+        
+    except Exception as e:
+        logger.error(f"Route addition failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/status")
+async def get_status():
+    """System status check"""
+    try:
+        db_service = DatabaseService(db_manager)
+        drivers = await db_service.get_drivers()
+        
+        return {
+            "status": "operational",
+            "drivers_count": len(drivers),
+            "or_tools_enabled": True,
+            "google_sheets_integration": True
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

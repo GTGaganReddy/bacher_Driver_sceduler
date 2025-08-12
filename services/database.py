@@ -87,11 +87,12 @@ class DatabaseService:
     async def save_assignments(self, week_start: date, assignments: List[Dict]):
         """Save optimized assignments for a week"""
         async with self.db_manager.get_connection() as conn:
+            # Delete existing assignments for this week first
+            await conn.execute("DELETE FROM assignments WHERE week_start = $1", week_start)
+            # Insert new assignments
             await conn.execute("""
                 INSERT INTO assignments (week_start, assignments)
                 VALUES ($1, $2)
-                ON CONFLICT (week_start)
-                DO UPDATE SET assignments = $2
             """, week_start, json.dumps(assignments))
     
     async def get_assignments(self, week_start: date) -> Optional[List[Dict]]:
