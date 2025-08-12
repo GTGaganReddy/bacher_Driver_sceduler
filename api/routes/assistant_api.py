@@ -366,6 +366,15 @@ async def reset_system():
             await conn.execute("DELETE FROM assignments")
             logger.info("Cleared all assignments")
             
+            # Clear routes that were added via API (created after initial system setup)
+            # Only remove routes added after August 11, 2025 to preserve original system data
+            await conn.execute("""
+                DELETE FROM routes 
+                WHERE date BETWEEN '2025-07-07' AND '2025-07-13' 
+                AND created_at > '2025-08-11 21:10:00'
+            """)
+            logger.info("Cleared manually added routes (preserving original system routes)")
+            
             # Reset all driver availability to true (available) for July 7-13, 2025
             # Keep Sunday (2025-07-13) as unavailable for all drivers
             await conn.execute("""
@@ -396,7 +405,8 @@ async def reset_system():
             "drivers_count": len(drivers),
             "routes_count": len(routes),
             "assignments_cleared": True,
-            "availability_reset": True
+            "availability_reset": True,
+            "routes_reset": True
         }
         
     except Exception as e:

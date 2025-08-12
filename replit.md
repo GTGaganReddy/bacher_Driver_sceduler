@@ -8,6 +8,13 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+## August 12, 2025 - Reset Function Fix & Data Consistency Enhancement
+- **CRITICAL FIX**: Fixed reset function to properly clear both routes and driver availability
+- **Route reset logic**: Now removes manually added routes while preserving original system data
+- **Consistent state management**: Reset function maintains data integrity across all tables
+- **Timestamp-based filtering**: Only clears routes added after initial system setup
+- **Complete reset workflow**: Assignments, routes, and availability all reset consistently
+
 ## August 12, 2025 - Complete Deployment Fix & Health Check Enhancement
 - **CRITICAL DEPLOYMENT FIX**: Applied all suggested fixes for Cloud Run deployment failures
 - **Fixed run command**: Explicitly handles main.py execution with proper port binding on 5000
