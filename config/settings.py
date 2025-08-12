@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     
     # Application
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
-    PORT: int = int(os.getenv("PORT", "8000"))
+    PORT: int = int(os.getenv("PORT", "5000"))  # Default to 5000 for Replit deployment
     WEEK_DAYS: int = int(os.getenv("WEEK_DAYS", "7"))
     
     # Logging

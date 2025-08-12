@@ -8,6 +8,14 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+## August 12, 2025 - Deployment Optimization & Health Check Enhancements
+- **Fixed deployment configuration**: Updated port handling to use PORT environment variable
+- **Enhanced root endpoint**: Added "status": "healthy" to root endpoint for deployment health checks
+- **Added rapid health check**: New `/healthz` endpoint for quick deployment health verification
+- **Improved logging**: Added port information to startup logs for better deployment debugging
+- **Port configuration fix**: Updated settings.py to default to port 5000 for Replit deployments
+- **Deployment ready**: All suggested fixes applied for cloud deployment compatibility
+
 ## August 12, 2025 - Complete OpenAI Assistant Integration with 422 Error Resolution
 - **CRITICAL FIX**: Resolved all 422 request format errors for OpenAI Assistant integration
 - Added simplified endpoints: `/update-driver-availability` and `/add-single-route`

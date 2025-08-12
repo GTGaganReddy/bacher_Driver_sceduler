@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from config.settings import settings
 from api.routes import drivers, routes, scheduling, health, assistant_api
 import logging
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -41,14 +42,23 @@ app.include_router(assistant_api.router, tags=["Assistant API"])
 
 @app.get("/")
 async def root():
-    """Root endpoint with API info"""
+    """Root endpoint with API info - serves as a quick health check for deployment"""
     return {
         "service": "Driver Scheduling Backend",
         "version": "1.0.0",
+        "status": "healthy",
         "docs": "/docs",
         "health": "/health"
     }
 
+@app.get("/healthz")
+async def rapid_health_check():
+    """Rapid health check endpoint for deployment health checks"""
+    return {"status": "ok"}
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=settings.DEBUG)
+    # Use PORT from environment or settings, fallback to 5000 for development
+    port = int(os.getenv("PORT", settings.PORT if hasattr(settings, 'PORT') else 5000))
+    logger.info(f"Starting FastAPI server on host 0.0.0.0 port {port}")
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=settings.DEBUG)
