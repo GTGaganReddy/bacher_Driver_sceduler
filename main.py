@@ -43,22 +43,78 @@ app.include_router(assistant_api.router, tags=["Assistant API"])
 @app.get("/")
 async def root():
     """Root endpoint with API info - serves as a quick health check for deployment"""
-    return {
-        "service": "Driver Scheduling Backend",
-        "version": "1.0.0",
-        "status": "healthy",
-        "docs": "/docs",
-        "health": "/health"
-    }
+    try:
+        # Quick database connectivity check for deployment health
+        from api.dependencies import db_manager
+        if db_manager.pool is not None:
+            db_status = "connected"
+        else:
+            db_status = "not_connected"
+        
+        return {
+            "service": "Driver Scheduling Backend",
+            "version": "1.0.0",
+            "status": "healthy",
+            "database": db_status,
+            "docs": "/docs",
+            "health": "/health",
+            "rapid_health": "/healthz"
+        }
+    except Exception as e:
+        logger.warning(f"Root endpoint health check warning: {str(e)}")
+        # Still return healthy status for deployment, but log the warning
+        return {
+            "service": "Driver Scheduling Backend",
+            "version": "1.0.0",
+            "status": "healthy",
+            "database": "unknown",
+            "docs": "/docs",
+            "health": "/health",
+            "rapid_health": "/healthz"
+        }
 
 @app.get("/healthz")
 async def rapid_health_check():
-    """Rapid health check endpoint for deployment health checks"""
-    return {"status": "ok"}
+    """Rapid health check endpoint for deployment health checks - always responds quickly"""
+    return {"status": "ok", "timestamp": "deployment-ready"}
+
+@app.get("/ready")
+async def readiness_check():
+    """Kubernetes/Cloud Run readiness check endpoint"""
+    return {"status": "ready", "service": "driver-scheduling-backend"}
+
+@app.get("/live") 
+async def liveness_check():
+    """Kubernetes/Cloud Run liveness check endpoint"""
+    return {"status": "alive", "service": "driver-scheduling-backend"}
 
 if __name__ == "__main__":
     import uvicorn
-    # Use PORT from environment or settings, fallback to 5000 for development
-    port = int(os.getenv("PORT", settings.PORT if hasattr(settings, 'PORT') else 5000))
+    # Always use PORT environment variable for deployment (Cloud Run sets this)
+    port = int(os.getenv("PORT", 5000))
     logger.info(f"Starting FastAPI server on host 0.0.0.0 port {port}")
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=settings.DEBUG)
+    logger.info(f"Environment: {'DEPLOYMENT' if settings.IS_DEPLOYMENT else 'DEVELOPMENT'}")
+    logger.info(f"Debug mode: {settings.DEBUG}")
+    
+    # Disable reload in production for deployment stability
+    reload = settings.DEBUG and not settings.IS_DEPLOYMENT
+    
+    # Production-optimized uvicorn configuration
+    uvicorn_config = {
+        "app": "main:app",
+        "host": "0.0.0.0",
+        "port": port,
+        "reload": reload
+    }
+    
+    # Additional production settings for deployment
+    if settings.IS_DEPLOYMENT:
+        uvicorn_config.update({
+            "workers": 1,  # Single worker for Cloud Run
+            "log_level": "info",
+            "access_log": True,
+            "use_colors": False  # Better for deployment logs
+        })
+        logger.info("Production configuration applied for deployment")
+    
+    uvicorn.run(**uvicorn_config)

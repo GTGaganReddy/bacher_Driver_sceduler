@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     PORT: int = int(os.getenv("PORT", "5000"))  # Default to 5000 for Replit deployment
     WEEK_DAYS: int = int(os.getenv("WEEK_DAYS", "7"))
     
+    # Deployment Environment Detection
+    IS_CLOUD_RUN: bool = bool(os.getenv("CLOUD_RUN_SERVICE"))
+    IS_DEPLOYMENT: bool = bool(os.getenv("K_SERVICE")) or bool(os.getenv("CLOUD_RUN_SERVICE"))
+    
     # Logging
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     
