@@ -450,4 +450,233 @@ LOG_LEVEL=INFO
 - **Optimization**: Google OR-Tools CP-SAT solver
 - **HTTP Client**: HTTPX for async Google Cloud Function calls
 
-This technical documentation provides a complete overview of the BubbleGPT Assistant workflow, from initial API request through optimization and final Google Sheets update.
+## 11. Future Enhancements: Dynamic Constraint Management
+
+### 11.1 Conversational Constraint Control via BubbleGPT Assistant
+The next evolution of the system will enable dynamic constraint modification through natural language conversations with the BubbleGPT Assistant, moving beyond fixed OR-Tools constraints to a flexible, user-controlled optimization framework.
+
+### 11.2 Current Constraint Limitations
+**Fixed Constraints (Current System)**:
+- Monthly hour limits: 174 hours per driver (hardcoded)
+- Saturday route assignment: 452SA always assigned to "Klagenfurt - Samstagsfahrer" (hardcoded)
+- Sequential optimization: Day-by-day processing (fixed algorithm)
+- Availability constraints: Binary available/unavailable (simple boolean)
+
+**Limitation**: Traditional OR-Tools implementations require constraint definitions at code level, making runtime modifications impossible without code changes.
+
+### 11.3 Proposed Dynamic Constraint Architecture
+
+#### 11.3.1 Constraint Configuration API
+```json
+POST /api/v1/assistant/configure-constraints
+{
+  "constraint_type": "driver_weekly_hours",
+  "parameters": {
+    "max_hours_per_week": 45,
+    "apply_to_drivers": ["all", "specific_list"],
+    "exceptions": [
+      {"driver_name": "Klagenfurt - Samstagsfahrer", "max_hours": 20}
+    ]
+  },
+  "effective_date": "2025-07-07",
+  "description": "Reduce weekly hours to 45h per driver for better work-life balance"
+}
+```
+
+#### 11.3.2 Conversational Constraint Management
+**Natural Language Examples**:
+- "Set maximum working hours per driver to 40 hours per week"
+- "Allow driver Genäuß, Thomas to work maximum 35 hours this week only"
+- "Remove the Saturday constraint for route 452SA - let any driver take it"
+- "Add a new constraint: no driver can work more than 3 consecutive days"
+- "Prioritize shorter routes for drivers over 50 years old"
+
+#### 11.3.3 Constraint Types and Parameters
+
+**1. Time-Based Constraints**:
+```json
+{
+  "type": "time_constraint",
+  "parameters": {
+    "max_daily_hours": 12,
+    "max_weekly_hours": 45,
+    "min_rest_between_shifts": 8,
+    "max_consecutive_days": 5
+  }
+}
+```
+
+**2. Route Assignment Rules**:
+```json
+{
+  "type": "assignment_rule",
+  "parameters": {
+    "route_preferences": {
+      "431oS": ["preferred_drivers": ["Driver A", "Driver B"]],
+      "Saturday_routes": ["any_driver": true]
+    },
+    "driver_specializations": {
+      "long_distance": ["Driver C", "Driver D"],
+      "city_routes": ["Driver E", "Driver F"]
+    }
+  }
+}
+```
+
+**3. Workload Distribution**:
+```json
+{
+  "type": "workload_distribution",
+  "parameters": {
+    "balance_strategy": "equal_hours",
+    "allow_overtime": false,
+    "priority_drivers": [],
+    "fair_rotation": true
+  }
+}
+```
+
+**4. Custom Business Rules**:
+```json
+{
+  "type": "business_rule",
+  "parameters": {
+    "rule_name": "no_back_to_back_long_routes",
+    "condition": "if route_duration > 10 hours",
+    "action": "next_day_max_hours = 6",
+    "scope": "all_drivers"
+  }
+}
+```
+
+### 11.4 Technical Implementation Strategy
+
+#### 11.4.1 Dynamic Constraint Storage
+```sql
+-- New table for storing dynamic constraints
+CREATE TABLE optimization_constraints (
+    constraint_id SERIAL PRIMARY KEY,
+    constraint_type VARCHAR(50) NOT NULL,
+    parameters JSONB NOT NULL,
+    effective_start_date DATE,
+    effective_end_date DATE,
+    created_by TEXT DEFAULT 'bubblegpt_assistant',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### 11.4.2 Constraint Processing Engine
+```python
+class DynamicConstraintProcessor:
+    def __init__(self):
+        self.constraint_handlers = {
+            'driver_weekly_hours': self.apply_weekly_hour_constraints,
+            'route_assignment': self.apply_route_assignment_rules,
+            'workload_distribution': self.apply_distribution_rules,
+            'business_rule': self.apply_custom_business_rules
+        }
+    
+    async def build_constraints_for_optimization(self, date_range):
+        """Dynamically build OR-Tools constraints based on active configuration"""
+        active_constraints = await self.get_active_constraints(date_range)
+        constraint_set = []
+        
+        for constraint in active_constraints:
+            handler = self.constraint_handlers[constraint.type]
+            constraint_set.extend(handler(constraint.parameters))
+        
+        return constraint_set
+```
+
+#### 11.4.3 Natural Language Processing Pipeline
+```python
+class ConversationalConstraintParser:
+    def parse_constraint_request(self, natural_language_input: str) -> Dict:
+        """
+        Convert natural language to structured constraint definition
+        Example: "Set max hours to 40 per week" -> {"type": "driver_weekly_hours", "max_hours": 40}
+        """
+        # NLP processing to extract:
+        # - Constraint type identification
+        # - Parameter extraction
+        # - Scope determination (all drivers, specific drivers, date ranges)
+        # - Validation and error handling
+```
+
+### 11.5 User Experience Flow
+
+#### 11.5.1 Conversation Example
+```
+User: "I want to reduce working hours for all drivers to 40 hours per week"
+
+BubbleGPT Assistant: 
+- Parses intent: Modify weekly hour constraint
+- Calls: POST /api/v1/assistant/configure-constraints
+- Applies new constraint to OR-Tools optimization
+- Re-runs optimization with new rules
+- Updates Google Sheets
+- Confirms: "Weekly hours set to 40h/driver. Re-optimization complete. 38 assignments updated."
+
+User: "Actually, make an exception for driver Thamer, Karl - he can work 45 hours"
+
+BubbleGPT Assistant:
+- Parses intent: Add driver-specific exception
+- Updates constraint configuration
+- Re-optimizes with exception
+- Confirms: "Exception added for Thamer, Karl (45h max). Schedule updated."
+```
+
+#### 11.5.2 Constraint Management Commands
+- **Set Constraints**: "Set maximum daily hours to 10"
+- **Add Exceptions**: "Allow Bandzi, Attila to work weekends"
+- **Remove Rules**: "Remove the Saturday route restriction"
+- **Temporary Changes**: "For this week only, allow 50 hours per driver"
+- **View Current Rules**: "Show me all active constraints"
+- **Reset to Defaults**: "Reset all constraints to system defaults"
+
+### 11.6 Benefits of Dynamic Constraint System
+
+#### 11.6.1 Operational Flexibility
+- **Real-time Adaptation**: Adjust to changing business requirements without code deployment
+- **Seasonal Adjustments**: Modify constraints for peak/low seasons
+- **Regulatory Compliance**: Quickly implement new labor law requirements
+- **Emergency Handling**: Temporary constraint relaxation for urgent situations
+
+#### 11.6.2 User Empowerment
+- **Non-technical Configuration**: Business users can modify optimization rules via chat
+- **Immediate Feedback**: See constraint effects in Google Sheets within seconds
+- **Experimentation**: Try different rules and compare results
+- **Historical Tracking**: Maintain audit trail of constraint changes
+
+#### 11.6.3 Business Intelligence Integration
+- **Constraint Performance**: Track which constraints improve efficiency
+- **Rule Optimization**: Identify most effective constraint combinations
+- **Impact Analysis**: Measure before/after effects of constraint changes
+- **Compliance Reporting**: Generate reports on constraint adherence
+
+### 11.7 Implementation Phases
+
+#### Phase 1: Basic Dynamic Constraints (Q2 2025)
+- Weekly/daily hour limit modification
+- Driver-specific exceptions
+- Simple route assignment preferences
+
+#### Phase 2: Advanced Rule Engine (Q3 2025)
+- Multi-condition business rules
+- Temporal constraints (time-based rules)
+- Complex dependency handling
+
+#### Phase 3: AI-Assisted Constraint Optimization (Q4 2025)
+- Machine learning recommendations for optimal constraints
+- Automatic constraint adjustment based on historical performance
+- Predictive constraint modeling
+
+#### Phase 4: Full Conversational Optimization (Q1 2026)
+- Natural language rule definition
+- Voice-based constraint management
+- Integrated business intelligence and constraint optimization
+
+This dynamic constraint management system will transform the logistics scheduling platform from a fixed-rule optimization tool into a flexible, conversational business intelligence platform that adapts to changing operational needs in real-time.
+
+This technical documentation provides a complete overview of the current BubbleGPT Assistant workflow and the planned evolution toward dynamic, conversational constraint management.

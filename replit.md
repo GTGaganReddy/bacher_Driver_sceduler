@@ -8,7 +8,7 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
-## August 13, 2025 - Complete Technical Workflow Documentation
+## August 13, 2025 - Complete Technical Documentation with Future Roadmap
 - **COMPREHENSIVE DOCUMENTATION**: Created detailed technical documentation for BubbleGPT Assistant workflow
 - **Architecture Overview**: BubbleGPT → FastAPI Backend → PostgreSQL → OR-Tools → Google Cloud Function → Google Sheets
 - **API Documentation**: All 8 endpoints with request/response formats and internal processing workflows
@@ -17,6 +17,9 @@ Preferred communication style: Simple, everyday language.
 - **Google Sheets Integration**: Detailed GCF payload format and 147-entry driver grid structure
 - **Error Handling & Security**: Comprehensive resilience patterns and authentication flows
 - **Deployment Guide**: Cloud Run configuration with environment variables and dependencies
+- **FUTURE ROADMAP**: Dynamic constraint management via conversational BubbleGPT interface
+- **Flexible Optimization**: Chat-based control of OR-Tools constraints (working hours, route rules, etc.)
+- **Implementation Phases**: 4-phase rollout from basic dynamic constraints to full AI-assisted optimization
 
 ## August 12, 2025 - Complete Reset Function Enhancement with Auto-Optimization
 - **CRITICAL FIX**: Enhanced reset function for complete workflow automation
