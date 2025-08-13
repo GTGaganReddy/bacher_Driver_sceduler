@@ -8,6 +8,16 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+## August 13, 2025 - Complete Technical Workflow Documentation
+- **COMPREHENSIVE DOCUMENTATION**: Created detailed technical documentation for BubbleGPT Assistant workflow
+- **Architecture Overview**: BubbleGPT → FastAPI Backend → PostgreSQL → OR-Tools → Google Cloud Function → Google Sheets
+- **API Documentation**: All 8 endpoints with request/response formats and internal processing workflows
+- **OR-Tools Deep Dive**: Sequential day-by-day optimization algorithm with capacity tracking
+- **Database Schema**: Complete PostgreSQL schema with operations and performance characteristics
+- **Google Sheets Integration**: Detailed GCF payload format and 147-entry driver grid structure
+- **Error Handling & Security**: Comprehensive resilience patterns and authentication flows
+- **Deployment Guide**: Cloud Run configuration with environment variables and dependencies
+
 ## August 12, 2025 - Complete Reset Function Enhancement with Auto-Optimization
 - **CRITICAL FIX**: Enhanced reset function for complete workflow automation
 - **Full data reset**: Clears assignments, routes, and resets driver availability consistently
