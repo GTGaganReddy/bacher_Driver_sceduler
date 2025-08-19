@@ -489,7 +489,7 @@ async def get_status():
 
 @router.post("/create-fixed-route")
 async def create_fixed_route(request: FixedRouteRequest):
-    """Create a new fixed driver-route assignment"""
+    """Create a new fixed driver-route assignment and automatically reoptimize"""
     try:
         logger.info(f"Creating fixed route: {request.driver_name} -> {request.route_pattern}")
         
@@ -511,15 +511,59 @@ async def create_fixed_route(request: FixedRouteRequest):
             notes=request.notes
         )
         
-        return {
-            "status": "success",
-            "message": f"Fixed route created: {request.driver_name} -> {request.route_pattern}",
-            "fixed_route_id": fixed_route_id,
-            "driver_name": request.driver_name,
-            "route_pattern": request.route_pattern,
-            "priority": request.priority,
-            "day_of_week": request.day_of_week
-        }
+        # Automatically rerun optimization with new fixed route
+        logger.info("Automatically rerunning optimization after fixed route creation")
+        
+        # Get all data for optimization
+        routes = await db_service.get_routes()
+        availability = await db_service.get_driver_availability()
+        fixed_routes = await db_service.get_fixed_driver_routes()
+        
+        if routes:
+            # Run enhanced optimization
+            optimization_result = await db_service.run_optimization_with_fixed_routes(
+                drivers, routes, availability, fixed_routes
+            )
+            
+            # Save results and update Google Sheets
+            week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
+            assignments = optimization_result.get('assignments', {})
+            await db_service.save_assignments(week_start, list(assignments.values()))
+            
+            # Update Google Sheets
+            week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+            sheets_service = GoogleSheetsService()
+            sheets_result = await sheets_service.update_sheet(
+                optimization_result,
+                all_drivers=drivers,
+                all_dates=week_dates
+            )
+            sheets_updated = sheets_result is not None
+            
+            return {
+                "status": "success",
+                "message": f"Fixed route created and optimization completed: {request.driver_name} -> {request.route_pattern}",
+                "fixed_route_id": fixed_route_id,
+                "driver_name": request.driver_name,
+                "route_pattern": request.route_pattern,
+                "priority": request.priority,
+                "day_of_week": request.day_of_week,
+                "optimization_completed": True,
+                "sheets_updated": sheets_updated,
+                "total_routes_assigned": optimization_result.get('stats', {}).get('assigned_routes', 0)
+            }
+        else:
+            return {
+                "status": "success",
+                "message": f"Fixed route created: {request.driver_name} -> {request.route_pattern}",
+                "fixed_route_id": fixed_route_id,
+                "driver_name": request.driver_name,
+                "route_pattern": request.route_pattern,
+                "priority": request.priority,
+                "day_of_week": request.day_of_week,
+                "optimization_completed": False,
+                "note": "No routes to optimize"
+            }
         
     except HTTPException:
         raise
@@ -548,18 +592,144 @@ async def get_fixed_routes():
 
 @router.delete("/fixed-routes/{fixed_route_id}")
 async def delete_fixed_route(fixed_route_id: int):
-    """Delete a fixed driver-route assignment"""
+    """Delete a fixed driver-route assignment and automatically reoptimize"""
     try:
         logger.info(f"Deleting fixed route ID: {fixed_route_id}")
         
         db_service = DatabaseService(db_manager)
         await db_service.delete_fixed_driver_route(fixed_route_id)
         
-        return {
-            "status": "success",
-            "message": f"Fixed route ID {fixed_route_id} deleted successfully"
-        }
+        # Automatically rerun optimization after deletion
+        logger.info("Automatically rerunning optimization after fixed route deletion")
+        
+        # Get all data for optimization
+        drivers = await db_service.get_drivers()
+        routes = await db_service.get_routes()
+        availability = await db_service.get_driver_availability()
+        fixed_routes = await db_service.get_fixed_driver_routes()
+        
+        if routes:
+            # Run enhanced optimization
+            optimization_result = await db_service.run_optimization_with_fixed_routes(
+                drivers, routes, availability, fixed_routes
+            )
+            
+            # Save results and update Google Sheets
+            week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
+            assignments = optimization_result.get('assignments', {})
+            await db_service.save_assignments(week_start, list(assignments.values()))
+            
+            # Update Google Sheets
+            week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+            sheets_service = GoogleSheetsService()
+            sheets_result = await sheets_service.update_sheet(
+                optimization_result,
+                all_drivers=drivers,
+                all_dates=week_dates
+            )
+            sheets_updated = sheets_result is not None
+            
+            return {
+                "status": "success",
+                "message": f"Fixed route ID {fixed_route_id} deleted and optimization completed",
+                "optimization_completed": True,
+                "sheets_updated": sheets_updated,
+                "total_routes_assigned": optimization_result.get('stats', {}).get('assigned_routes', 0)
+            }
+        else:
+            return {
+                "status": "success",
+                "message": f"Fixed route ID {fixed_route_id} deleted successfully",
+                "optimization_completed": False,
+                "note": "No routes to optimize"
+            }
         
     except Exception as e:
         logger.error(f"Delete fixed route failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to delete fixed route: {str(e)}")
+
+
+@router.put("/fixed-routes/{fixed_route_id}")
+async def update_fixed_route(fixed_route_id: int, request: FixedRouteRequest):
+    """Update an existing fixed driver-route assignment and automatically reoptimize"""
+    try:
+        logger.info(f"Updating fixed route ID {fixed_route_id}: {request.driver_name} -> {request.route_pattern}")
+        
+        db_service = DatabaseService(db_manager)
+        
+        # Find driver by name
+        drivers = await db_service.get_drivers()
+        driver = next((d for d in drivers if d['name'] == request.driver_name), None)
+        
+        if not driver:
+            raise HTTPException(status_code=404, detail=f"Driver '{request.driver_name}' not found")
+        
+        # Update fixed route assignment
+        await db_service.update_fixed_driver_route(
+            fixed_route_id=fixed_route_id,
+            driver_id=driver['driver_id'],
+            route_pattern=request.route_pattern,
+            priority=request.priority,
+            day_of_week=request.day_of_week.lower() if request.day_of_week != "any" else "any",
+            notes=request.notes
+        )
+        
+        # Automatically rerun optimization with updated fixed route
+        logger.info("Automatically rerunning optimization after fixed route update")
+        
+        # Get all data for optimization
+        routes = await db_service.get_routes()
+        availability = await db_service.get_driver_availability()
+        fixed_routes = await db_service.get_fixed_driver_routes()
+        
+        if routes:
+            # Run enhanced optimization
+            optimization_result = await db_service.run_optimization_with_fixed_routes(
+                drivers, routes, availability, fixed_routes
+            )
+            
+            # Save results and update Google Sheets
+            week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
+            assignments = optimization_result.get('assignments', {})
+            await db_service.save_assignments(week_start, list(assignments.values()))
+            
+            # Update Google Sheets
+            week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+            sheets_service = GoogleSheetsService()
+            sheets_result = await sheets_service.update_sheet(
+                optimization_result,
+                all_drivers=drivers,
+                all_dates=week_dates
+            )
+            sheets_updated = sheets_result is not None
+            
+            return {
+                "status": "success",
+                "message": f"Fixed route updated and optimization completed: {request.driver_name} -> {request.route_pattern}",
+                "fixed_route_id": fixed_route_id,
+                "driver_name": request.driver_name,
+                "route_pattern": request.route_pattern,
+                "priority": request.priority,
+                "day_of_week": request.day_of_week,
+                "optimization_completed": True,
+                "sheets_updated": sheets_updated,
+                "total_routes_assigned": optimization_result.get('stats', {}).get('assigned_routes', 0)
+            }
+        else:
+            return {
+                "status": "success",
+                "message": f"Fixed route updated: {request.driver_name} -> {request.route_pattern}",
+                "fixed_route_id": fixed_route_id,
+                "driver_name": request.driver_name,
+                "route_pattern": request.route_pattern,
+                "priority": request.priority,
+                "day_of_week": request.day_of_week,
+                "optimization_completed": False,
+                "note": "No routes to optimize"
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update fixed route failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update fixed route: {str(e)}")
