@@ -44,6 +44,291 @@ def parse_json_details(details_str: str) -> Dict:
     except (json.JSONDecodeError, TypeError):
         return {}
 
+def run_ortools_optimization_with_fixed_routes(drivers: List[Dict], routes: List[Dict], 
+                                                availability: List[Dict], fixed_routes: List[Dict] = None) -> Dict:
+    """
+    Enhanced OR-Tools optimization with fixed driver-route priority assignments
+    
+    Process:
+    1. Apply fixed route assignments first (if driver is available)
+    2. Run OR-Tools optimization for remaining routes
+    3. Fallback: If fixed driver unavailable, route goes to optimization pool
+    
+    Args:
+        drivers: List of driver dictionaries
+        routes: List of route dictionaries  
+        availability: List of driver availability dictionaries
+        fixed_routes: List of fixed driver-route assignments from database
+    """
+    from datetime import datetime
+    import copy
+    
+    try:
+        logger.info(f"Starting enhanced optimization with {len(fixed_routes or [])} fixed route rules")
+        logger.info(f"Total routes received: {len(routes)}")
+        
+        # Parse drivers from database format
+        driver_info = {}
+        driver_remaining_hours = {}
+        
+        for driver in drivers:
+            driver_id = driver.get('driver_id') or driver.get('id')
+            driver_name = driver.get('name', 'Unknown Driver')
+            
+            details = parse_json_details(driver.get('details', ''))
+            monthly_hours_str = details.get('monthly_hours', '160:00')
+            monthly_hours = parse_time_string_to_hours(monthly_hours_str)
+            
+            driver_info[driver_id] = {
+                'name': driver_name,
+                'monthly_hours': monthly_hours,
+                'type': details.get('type', 'unknown')
+            }
+            driver_remaining_hours[driver_id] = monthly_hours
+        
+        # Parse availability - driver available on specific dates
+        availability_map = {}
+        for avail in availability:
+            driver_id = avail.get('driver_id')
+            avail_date = avail.get('date')
+            is_available = avail.get('available', True)
+            
+            if driver_id not in availability_map:
+                availability_map[driver_id] = {}
+            availability_map[driver_id][avail_date] = is_available
+        
+        # Parse routes and group by date
+        routes_by_date = {}
+        for route in routes:
+            route_date = route.get('date')
+            route_name = route.get('route_name', 'Unknown Route')
+            route_id = route.get('route_id')
+            
+            details = parse_json_details(route.get('details', ''))
+            duration_str = details.get('duration', '8:00')
+            duration_hours = parse_time_string_to_hours(duration_str)
+            
+            if route_date not in routes_by_date:
+                routes_by_date[route_date] = []
+            
+            routes_by_date[route_date].append({
+                'route_id': route_id,
+                'route_name': route_name,
+                'duration_hours': duration_hours,
+                'details': details
+            })
+        
+        # Create fixed route lookup for quick matching
+        fixed_route_lookup = {}
+        if fixed_routes:
+            for fixed_route in fixed_routes:
+                route_pattern = fixed_route.get('route_pattern')
+                driver_id = fixed_route.get('driver_id')
+                day_of_week = fixed_route.get('day_of_week', 'any').lower()
+                priority = fixed_route.get('priority', 1)
+                
+                if route_pattern not in fixed_route_lookup:
+                    fixed_route_lookup[route_pattern] = []
+                
+                fixed_route_lookup[route_pattern].append({
+                    'driver_id': driver_id,
+                    'driver_name': fixed_route.get('driver_name'),
+                    'day_of_week': day_of_week,
+                    'priority': priority
+                })
+        
+        # Sequential optimization with fixed route handling
+        final_assignments = {}
+        total_assigned = 0
+        
+        for route_date in sorted(routes_by_date.keys()):
+            date_str = route_date.strftime('%Y-%m-%d') if hasattr(route_date, 'strftime') else str(route_date)
+            day_name = route_date.strftime('%A').lower() if hasattr(route_date, 'strftime') else 'unknown'
+            
+            logger.info(f"Processing date: {date_str} ({day_name}) - {len(date_routes)} routes available")
+            
+            date_routes = routes_by_date[route_date]
+            fixed_assignments = []
+            remaining_routes = []
+            
+            # Phase 1: Apply fixed route assignments
+            for route in date_routes:
+                route_name = route['route_name']
+                assigned_via_fixed = False
+                
+                # Check if this route has fixed assignments
+                if route_name in fixed_route_lookup:
+                    # Sort by priority (lower number = higher priority)
+                    candidates = sorted(fixed_route_lookup[route_name], key=lambda x: x['priority'])
+                    
+                    for candidate in candidates:
+                        driver_id = candidate['driver_id']
+                        required_day = candidate['day_of_week']
+                        
+                        # Check day of week compatibility
+                        if required_day != 'any' and required_day != day_name:
+                            continue
+                        
+                        # Check driver availability
+                        if driver_id in availability_map and route_date in availability_map[driver_id]:
+                            if not availability_map[driver_id][route_date]:
+                                logger.info(f"Fixed driver {candidate['driver_name']} unavailable for {route_name} on {date_str}")
+                                continue
+                        
+                        # Check remaining hours
+                        if driver_remaining_hours[driver_id] < route['duration_hours']:
+                            logger.info(f"Fixed driver {candidate['driver_name']} insufficient hours for {route_name}")
+                            continue
+                        
+                        # Assign fixed route
+                        fixed_assignments.append({
+                            'route_id': route['route_id'],
+                            'route_name': route_name,
+                            'driver_id': driver_id,
+                            'driver_name': candidate['driver_name'],
+                            'duration_hours': route['duration_hours'],
+                            'assignment_type': 'fixed'
+                        })
+                        
+                        # Reduce driver hours
+                        driver_remaining_hours[driver_id] -= route['duration_hours']
+                        assigned_via_fixed = True
+                        total_assigned += 1
+                        
+                        logger.info(f"FIXED: Assigned {route_name} to {candidate['driver_name']} ({route['duration_hours']}h). Remaining: {driver_remaining_hours[driver_id]:.1f}h")
+                        break
+                
+                # If not assigned via fixed route, add to optimization pool
+                if not assigned_via_fixed:
+                    remaining_routes.append(route)
+            
+            # Phase 2: OR-Tools optimization for remaining routes
+            if remaining_routes:
+                logger.info(f"Running OR-Tools for {len(remaining_routes)} remaining routes on {date_str}")
+                
+                # Run standard optimization for remaining routes
+                optimized_assignments = optimize_routes_for_date(
+                    remaining_routes, driver_info, driver_remaining_hours, 
+                    availability_map, route_date
+                )
+                
+                # Update remaining hours and add to final assignments
+                for assignment in optimized_assignments:
+                    driver_id = assignment['driver_id']
+                    driver_remaining_hours[driver_id] -= assignment['duration_hours']
+                    total_assigned += 1
+                    assignment['assignment_type'] = 'optimized'
+            else:
+                optimized_assignments = []
+            
+            # Combine fixed and optimized assignments for this date
+            all_date_assignments = fixed_assignments + optimized_assignments
+            final_assignments[date_str] = {route_assignment['route_name']: {
+                'driver_name': route_assignment['driver_name'],
+                'driver_id': route_assignment['driver_id'],
+                'duration_hours': route_assignment['duration_hours'],
+                'status': 'assigned',
+                'assignment_type': route_assignment['assignment_type']
+            } for route_assignment in all_date_assignments}
+        
+        logger.info(f"Enhanced optimization completed: {total_assigned} total routes assigned ({len(fixed_routes or [])} fixed rules applied)")
+        
+        return {
+            'status': 'success',
+            'assignments': final_assignments,
+            'total_routes': sum(len(routes) for routes in routes_by_date.values()),
+            'total_assigned': total_assigned,
+            'fixed_rules_applied': len(fixed_routes or []),
+            'solver_status': 'OPTIMAL_WITH_FIXED_ROUTES'
+        }
+        
+    except Exception as e:
+        logger.error(f"Enhanced optimization failed: {str(e)}")
+        return {
+            'status': 'error',
+            'error': str(e),
+            'assignments': {},
+            'total_routes': 0,
+            'total_assigned': 0
+        }
+
+def optimize_routes_for_date(routes: List[Dict], driver_info: Dict, driver_remaining_hours: Dict, 
+                           availability_map: Dict, route_date) -> List[Dict]:
+    """Helper function to run OR-Tools optimization for a specific date"""
+    try:
+        # Create solver
+        solver = pywraplp.Solver.CreateSolver('SCIP')
+        if not solver:
+            return []
+        
+        # Get available drivers for this date
+        available_drivers = []
+        for driver_id, info in driver_info.items():
+            # Check availability
+            if driver_id in availability_map and route_date in availability_map[driver_id]:
+                if not availability_map[driver_id][route_date]:
+                    continue
+            
+            # Check remaining hours
+            if driver_remaining_hours[driver_id] > 0:
+                available_drivers.append(driver_id)
+        
+        if not available_drivers or not routes:
+            return []
+        
+        # Create decision variables
+        assignments = {}
+        for route in routes:
+            for driver_id in available_drivers:
+                var_name = f"assign_{route['route_id']}_to_{driver_id}"
+                assignments[(route['route_id'], driver_id)] = solver.BoolVar(var_name)
+        
+        # Constraint: Each route assigned to exactly one driver
+        for route in routes:
+            constraint = solver.Constraint(1, 1)
+            for driver_id in available_drivers:
+                constraint.SetCoefficient(assignments[(route['route_id'], driver_id)], 1)
+        
+        # Constraint: Driver capacity
+        for driver_id in available_drivers:
+            constraint = solver.Constraint(0, driver_remaining_hours[driver_id])
+            for route in routes:
+                constraint.SetCoefficient(
+                    assignments[(route['route_id'], driver_id)], 
+                    route['duration_hours']
+                )
+        
+        # Objective: Maximize assignments (minimize unassigned routes)
+        objective = solver.Objective()
+        for route in routes:
+            for driver_id in available_drivers:
+                objective.SetCoefficient(assignments[(route['route_id'], driver_id)], 1)
+        objective.SetMaximization()
+        
+        # Solve
+        status = solver.Solve()
+        
+        # Extract solution
+        result_assignments = []
+        if status == pywraplp.Solver.OPTIMAL or status == pywraplp.Solver.FEASIBLE:
+            for route in routes:
+                for driver_id in available_drivers:
+                    if assignments[(route['route_id'], driver_id)].solution_value() > 0.5:
+                        result_assignments.append({
+                            'route_id': route['route_id'],
+                            'route_name': route['route_name'],
+                            'driver_id': driver_id,
+                            'driver_name': driver_info[driver_id]['name'],
+                            'duration_hours': route['duration_hours']
+                        })
+                        logger.info(f"OPTIMIZED: Assigned {route['route_name']} to {driver_info[driver_id]['name']} ({route['duration_hours']}h)")
+        
+        return result_assignments
+        
+    except Exception as e:
+        logger.error(f"Date-specific optimization failed: {str(e)}")
+        return []
+
 def run_ortools_optimization(drivers: List[Dict], routes: List[Dict], availability: List[Dict]) -> Dict:
     """
     Run OR-Tools optimization for driver-route assignment with sequential hour reduction

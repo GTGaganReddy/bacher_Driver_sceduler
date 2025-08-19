@@ -87,6 +87,37 @@ class DatabaseManager:
                     created_at TIMESTAMP DEFAULT NOW()
                 );
             """)
+
+            # Create fixed_driver_routes table for priority assignments
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS fixed_driver_routes (
+                    id SERIAL PRIMARY KEY,
+                    driver_id INTEGER REFERENCES drivers(driver_id) ON DELETE CASCADE,
+                    route_pattern VARCHAR(50) NOT NULL,
+                    priority INTEGER DEFAULT 1,
+                    day_of_week VARCHAR(20),
+                    effective_start_date DATE,
+                    effective_end_date DATE,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                );
+            """)
+
+            # Create indexes for fixed_driver_routes
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_fixed_driver_routes_active 
+                ON fixed_driver_routes(is_active, effective_start_date, effective_end_date);
+            """)
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_fixed_driver_routes_pattern 
+                ON fixed_driver_routes(route_pattern);
+            """)
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_fixed_driver_routes_day 
+                ON fixed_driver_routes(day_of_week);
+            """)
             
             logger.info("All tables created successfully")
     
