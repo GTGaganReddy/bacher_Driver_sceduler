@@ -157,11 +157,14 @@ async def update_availability(request: AvailabilityUpdateRequest):
         if updates_made == 0:
             raise HTTPException(status_code=400, detail="No valid updates processed")
         
-        # Rerun complete optimization
+        # Rerun complete optimization with fixed routes
         routes = await db_service.get_routes_by_date_range(week_start, week_end)
         availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        fixed_routes = await db_service.get_fixed_driver_routes()
         
-        optimization_result = run_ortools_optimization(drivers, routes, availability)
+        optimization_result = run_ortools_optimization_with_fixed_routes(
+            drivers, routes, availability, fixed_routes
+        )
         
         # Update Google Sheets
         week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
@@ -234,12 +237,15 @@ async def add_route(request: RouteRequest):
         route_id = await db_service.create_route(route_date, request.route_name, route_details)
         logger.info(f"Created route {request.route_name} with ID {route_id}")
         
-        # Rerun complete optimization with new route
+        # Rerun complete optimization with new route using enhanced optimizer
         drivers = await db_service.get_drivers()
         routes = await db_service.get_routes_by_date_range(week_start, week_end)
         availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        fixed_routes = await db_service.get_fixed_driver_routes()
         
-        optimization_result = run_ortools_optimization(drivers, routes, availability)
+        optimization_result = run_ortools_optimization_with_fixed_routes(
+            drivers, routes, availability, fixed_routes
+        )
         
         # Update Google Sheets
         week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
@@ -329,8 +335,11 @@ async def remove_route(request: RemoveRouteRequest):
         drivers = await db_service.get_drivers()
         routes = await db_service.get_routes_by_date_range(week_start, week_end)
         availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        fixed_routes = await db_service.get_fixed_driver_routes()
         
-        optimization_result = run_ortools_optimization(drivers, routes, availability)
+        optimization_result = run_ortools_optimization_with_fixed_routes(
+            drivers, routes, availability, fixed_routes
+        )
         
         # Update Google Sheets
         week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
@@ -408,19 +417,21 @@ async def reset_system():
             datetime.strptime('2025-07-13', '%Y-%m-%d').date()
         )
         
-        # Run optimization with reset state and update Google Sheets
-        optimizer = SchedulingOptimizer()
+        # Run optimization with reset state and update Google Sheets using enhanced optimizer
         sheets_service = GoogleSheetsService()
         
-        # Get driver availability for the reset state
+        # Get driver availability and fixed routes for the reset state
         availability = await db_service.get_availability_by_date_range(
             datetime.strptime('2025-07-07', '%Y-%m-%d').date(),
             datetime.strptime('2025-07-13', '%Y-%m-%d').date()
         )
+        fixed_routes = await db_service.get_fixed_driver_routes()
         
         if routes:
-            # Run optimization with current reset state
-            optimization_result = optimizer.optimize_schedule(drivers, routes, availability)
+            # Run enhanced optimization with current reset state
+            optimization_result = run_ortools_optimization_with_fixed_routes(
+                drivers, routes, availability, fixed_routes
+            )
             
             # Update Google Sheets with reset state
             week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()

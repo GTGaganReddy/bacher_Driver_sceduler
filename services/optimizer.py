@@ -65,6 +65,7 @@ def run_ortools_optimization_with_fixed_routes(drivers: List[Dict], routes: List
     
     try:
         logger.info(f"Starting enhanced optimization with {len(fixed_routes or [])} fixed route rules")
+        logger.info(f"Total routes received: {len(routes)}")
         
         # Parse drivers from database format
         driver_info = {}
@@ -144,7 +145,7 @@ def run_ortools_optimization_with_fixed_routes(drivers: List[Dict], routes: List
             date_str = route_date.strftime('%Y-%m-%d') if hasattr(route_date, 'strftime') else str(route_date)
             day_name = route_date.strftime('%A').lower() if hasattr(route_date, 'strftime') else 'unknown'
             
-            logger.info(f"Processing date: {date_str} ({day_name})")
+            logger.info(f"Processing date: {date_str} ({day_name}) - {len(date_routes)} routes available")
             
             date_routes = routes_by_date[route_date]
             fixed_assignments = []
