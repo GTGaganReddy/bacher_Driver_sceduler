@@ -485,6 +485,43 @@ async def get_status():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+@router.get("/debug-routes")
+async def debug_routes():
+    """Debug endpoint to check route and assignment data"""
+    try:
+        db_service = DatabaseService(db_manager)
+        
+        # Get routes for the week
+        week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
+        week_end = datetime.strptime('2025-07-13', '%Y-%m-%d').date()
+        routes = await db_service.get_routes_by_date_range(week_start, week_end)
+        
+        # Group routes by pattern
+        route_patterns = {}
+        for route in routes:
+            pattern = route.get('name', '')
+            if pattern not in route_patterns:
+                route_patterns[pattern] = []
+            route_patterns[pattern].append({
+                'id': route.get('id'),
+                'name': route.get('name'), 
+                'date': str(route.get('date')),
+                'duration_hours': route.get('duration_hours')
+            })
+        
+        # Get current assignments
+        assignments = await db_service.get_assignments_by_date_range(week_start, week_end)
+        
+        return {
+            "total_routes": len(routes),
+            "unique_patterns": len(route_patterns),
+            "pattern_distribution": {k: len(v) for k, v in route_patterns.items()},
+            "total_assignments": len(assignments),
+            "sample_patterns": {k: v[:2] for k, v in list(route_patterns.items())[:3]}
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Debug failed: {str(e)}")
+
 
 @router.post("/create-fixed-route")
 async def create_fixed_route(request: FixedRouteRequest):
