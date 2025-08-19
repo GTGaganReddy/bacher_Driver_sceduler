@@ -19,18 +19,6 @@ class GoogleSheetsService:
             assignments = optimization_result.get('assignments', {})
             drivers_payload = []
             
-            # Debug: Log the structure of optimization result
-            logger.info(f"Optimization result keys: {list(optimization_result.keys())}")
-            logger.info(f"Assignments keys: {list(assignments.keys())}")
-            if assignments:
-                first_date = list(assignments.keys())[0]
-                logger.info(f"Sample date '{first_date}' structure: {assignments[first_date]}")
-                if isinstance(assignments[first_date], dict) and assignments[first_date]:
-                    first_route = list(assignments[first_date].keys())[0]
-                    logger.info(f"Sample route '{first_route}' details: {assignments[first_date][first_route]}")
-            else:
-                logger.warning("No assignments found in optimization result")
-            
             # If all_drivers and all_dates provided, create complete driver grid
             if all_drivers and all_dates:
                 # Create assignment lookup for quick access
@@ -57,36 +45,11 @@ class GoogleSheetsService:
                                 duration = assignment_details.get('duration_hours', 8.0)
                                 hour_str = f"{int(duration)}:{int((duration % 1) * 60):02d}"
                                 
-                                # Handle multiple route assignments per driver per day
-                                if date_key in assignment_lookup[driver_name]:
-                                    # Driver already has assignment for this date - combine routes and hours
-                                    existing = assignment_lookup[driver_name][date_key]
-                                    if existing["type"] == "assigned":
-                                        # Combine route names and add hours
-                                        combined_route = f"{existing['route']},{route_name}"
-                                        existing_hours = float(existing["hour"].split(":")[0]) + float(existing["hour"].split(":")[1])/60
-                                        new_hours = existing_hours + duration
-                                        combined_hour_str = f"{int(new_hours)}:{int((new_hours % 1) * 60):02d}"
-                                        
-                                        assignment_lookup[driver_name][date_key] = {
-                                            "route": combined_route,
-                                            "hour": combined_hour_str,
-                                            "type": "assigned"
-                                        }
-                                    else:
-                                        # Replace F entry with route assignment
-                                        assignment_lookup[driver_name][date_key] = {
-                                            "route": route_name,
-                                            "hour": hour_str,
-                                            "type": "assigned"
-                                        }
-                                else:
-                                    # First assignment for this driver on this date
-                                    assignment_lookup[driver_name][date_key] = {
-                                        "route": route_name,
-                                        "hour": hour_str,
-                                        "type": "assigned"
-                                    }
+                                assignment_lookup[driver_name][date_key] = {
+                                    "route": route_name,
+                                    "hour": hour_str,
+                                    "type": "assigned"
+                                }
                 
                 # Create entries for ALL drivers on ALL dates (assigned, unavailable "F", or blank)
                 for driver in all_drivers:
@@ -142,25 +105,16 @@ class GoogleSheetsService:
             f_entries = len([d for d in drivers_payload if d["route"] == "F"])
             blank_entries = len([d for d in drivers_payload if not d["route"]])
             
-            # Debug: Show distribution of assigned routes
-            unique_routes = set([d["route"] for d in drivers_payload if d["route"] and d["route"] != "F"])
-            unique_drivers_with_routes = set([d["driver"] for d in drivers_payload if d["route"] and d["route"] != "F"])
-            
             logger.info(f"Sending {total_entries} total entries to Google Sheets via GCF ({assigned_entries} assigned, {f_entries} F entries, {blank_entries} blank)")
-            logger.info(f"Unique routes in payload: {len(unique_routes)} ({list(unique_routes)[:5]}...)")
-            logger.info(f"Unique drivers with assignments: {len(unique_drivers_with_routes)} ({list(unique_drivers_with_routes)[:3]}...)")
             
-            # Debug: Show sample entries for assigned drivers
+            # Debug: Show sample entries for unavailable drivers
             sample_entries = []
-            assigned_drivers = set([d["driver"] for d in drivers_payload if d["route"] and d["route"] != "F"])
-            for driver in list(assigned_drivers)[:3]:  # Show first 3 assigned drivers
-                driver_entries = [d for d in drivers_payload if d["driver"] == driver and d["route"]][:2]
+            for driver in ["Fröhlacher, Hubert", "Genäuß, Thomas"][:2]:
+                driver_entries = [d for d in drivers_payload if d["driver"] == driver][:2]
                 sample_entries.extend(driver_entries)
             
             if sample_entries:
-                logger.info(f"Sample assigned entries: {sample_entries}")
-            else:
-                logger.warning("No assigned entries found in payload - this may indicate an issue with assignment data conversion")
+                logger.info(f"Sample entries for test drivers: {sample_entries}")
             
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
