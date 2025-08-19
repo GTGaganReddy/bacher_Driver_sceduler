@@ -409,7 +409,6 @@ async def reset_system():
         )
         
         # Run optimization with reset state and update Google Sheets
-        optimizer = SchedulingOptimizer()
         sheets_service = GoogleSheetsService()
         
         # Get driver availability for the reset state
@@ -419,8 +418,8 @@ async def reset_system():
         )
         
         if routes:
-            # Run optimization with current reset state
-            optimization_result = optimizer.optimize_schedule(drivers, routes, availability)
+            # Run optimization with current reset state using the correct function
+            optimization_result = run_ortools_optimization(drivers, routes, availability)
             
             # Update Google Sheets with reset state
             week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()

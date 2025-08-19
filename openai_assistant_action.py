@@ -2,17 +2,23 @@
 OpenAI Assistant Action Code for Driver Scheduling System
 
 This code provides complete integration with the Driver Scheduling Backend API.
-It supports all four main operations:
+It supports all main operations:
 1. System Status Check
-2. Weekly Optimization
+2. Weekly Optimization  
 3. Update Driver Availability (with F entry support)
 4. Add New Routes
 5. System Reset
+6. Fixed Route Management (CREATE, READ, UPDATE, DELETE)
 
 Usage Instructions:
 1. Replace YOUR_API_BASE_URL with your actual FastAPI server URL
 2. Use this code as an OpenAI Assistant action
 3. The Assistant can now manage driver scheduling through natural language
+
+Fixed Route Management:
+- Fixed routes remain intact after system reset
+- Changes to fixed routes require manual optimization trigger
+- Fixed routes are applied first, then OR-Tools optimizes remaining routes
 """
 
 import json
@@ -37,6 +43,10 @@ class DriverSchedulingClient:
                 response = requests.get(url, headers=self.headers)
             elif method.upper() == "POST":
                 response = requests.post(url, headers=self.headers, json=data)
+            elif method.upper() == "PUT":
+                response = requests.put(url, headers=self.headers, json=data)
+            elif method.upper() == "DELETE":
+                response = requests.delete(url, headers=self.headers)
             else:
                 return {"error": f"Unsupported HTTP method: {method}"}
             
@@ -85,6 +95,40 @@ class DriverSchedulingClient:
             "duration_hours": duration_hours
         }
         return self._make_request("POST", "/api/v1/assistant/add-single-route", data)
+    
+    # Fixed Route Management Functions
+    
+    def create_fixed_route(self, driver_name: str, route_pattern: str, priority: int = 1, 
+                          day_of_week: str = "any", notes: str = "") -> Dict[str, Any]:
+        """Create a new fixed driver-route assignment"""
+        data = {
+            "driver_name": driver_name,
+            "route_pattern": route_pattern,
+            "priority": priority,
+            "day_of_week": day_of_week,
+            "notes": notes
+        }
+        return self._make_request("POST", "/api/v1/assistant/create-fixed-route", data)
+    
+    def get_fixed_routes(self) -> Dict[str, Any]:
+        """Get all active fixed driver-route assignments"""
+        return self._make_request("GET", "/api/v1/assistant/fixed-routes")
+    
+    def update_fixed_route(self, fixed_route_id: int, driver_name: str, route_pattern: str, 
+                          priority: int = 1, day_of_week: str = "any", notes: str = "") -> Dict[str, Any]:
+        """Update an existing fixed driver-route assignment"""
+        data = {
+            "driver_name": driver_name,
+            "route_pattern": route_pattern,
+            "priority": priority,
+            "day_of_week": day_of_week,
+            "notes": notes
+        }
+        return self._make_request("PUT", f"/api/v1/assistant/fixed-routes/{fixed_route_id}", data)
+    
+    def delete_fixed_route(self, fixed_route_id: int) -> Dict[str, Any]:
+        """Delete a fixed driver-route assignment"""
+        return self._make_request("DELETE", f"/api/v1/assistant/fixed-routes/{fixed_route_id}")
     
     def remove_route(self, route_name: str, date: str) -> Dict[str, Any]:
         """Remove a route and rerun optimization"""
