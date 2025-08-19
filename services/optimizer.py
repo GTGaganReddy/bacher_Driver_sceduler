@@ -366,6 +366,23 @@ def run_ortools_optimization_with_fixed_routes(drivers: List[Dict], routes: List
         
         logger.info(f"Enhanced optimization completed: {total_routes} total routes assigned ({assigned_routes} assigned, {unassigned_routes} unassigned)")
         
+        # FULL OPTIMIZER OUTPUT LOGGING
+        logger.info("=== COMPLETE OPTIMIZER OUTPUT ===")
+        import json
+        result_data = {
+            'assignments': final_assignments,
+            'stats': {
+                'total_routes': total_routes,
+                'assigned_routes': assigned_routes,
+                'unassigned_routes': unassigned_routes,
+                'solver_status': solver_status,
+                'driver_utilization': driver_utilization
+            },
+            'unassigned_routes': all_unassigned_routes
+        }
+        logger.info(f"Complete optimizer result: {json.dumps(result_data, indent=2)}")
+        logger.info("=== END OPTIMIZER OUTPUT ===")
+        
         # Determine solver status based on results
         if unassigned_routes == 0:
             solver_status = "OPTIMAL_WITH_FIXED_ROUTES"
