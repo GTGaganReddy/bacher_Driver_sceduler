@@ -107,12 +107,6 @@ class GoogleSheetsService:
             
             logger.info(f"Sending {total_entries} total entries to Google Sheets via GCF ({assigned_entries} assigned, {f_entries} F entries, {blank_entries} blank)")
             
-            # FULL PAYLOAD LOGGING
-            logger.info("=== COMPLETE GOOGLE SHEETS PAYLOAD ===")
-            import json
-            logger.info(f"Full payload structure: {json.dumps(payload, indent=2)}")
-            logger.info("=== END PAYLOAD ===")
-            
             # Debug: Show sample entries for unavailable drivers
             sample_entries = []
             for driver in ["Fröhlacher, Hubert", "Genäuß, Thomas"][:2]:
@@ -131,13 +125,6 @@ class GoogleSheetsService:
                 
                 response.raise_for_status()
                 result = response.json()
-                
-                # FULL RESPONSE LOGGING
-                logger.info("=== GOOGLE SHEETS RESPONSE ===")
-                logger.info(f"Response status: {response.status_code}")
-                logger.info(f"Response headers: {dict(response.headers)}")
-                logger.info(f"Full response body: {json.dumps(result, indent=2)}")
-                logger.info("=== END RESPONSE ===")
                 
                 logger.info("Successfully updated Google Sheets with complete driver grid")
                 return result

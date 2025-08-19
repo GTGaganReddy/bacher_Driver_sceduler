@@ -8,17 +8,16 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
-## August 19, 2025 - Complete Fixed Driver-Route Assignment API with Auto-Optimization
-- **COMPLETE API ENDPOINTS**: Full CRUD operations for fixed route assignments with comprehensive documentation
-- **AUTO-REOPTIMIZATION**: Enhanced endpoints trigger automatic OR-Tools optimization and Google Sheets updates after changes
-- **WORKING ENDPOINTS**: CREATE, READ, UPDATE, DELETE fixed routes with immediate reoptimization workflow
-- **MANUAL TRIGGER**: `/optimize-week` endpoint for manual reoptimization when automatic triggers need enhancement
-- **TWO-PHASE SYSTEM**: Fixed routes applied first (marked "FIXED"), remaining routes optimized (marked "OPTIMIZED")
-- **GOOGLE SHEETS SYNC**: Complete integration updates external sheets automatically after optimization
-- **BUSINESS WORKFLOW**: Change fixed routes → Manual optimization trigger → Sheets update (39 routes processed successfully)
-- **COMPREHENSIVE DOCS**: Complete API documentation with curl examples and business use cases
-- **PRODUCTION READY**: All endpoints tested with authentic driver data and route assignments
-- **TRANSPARENT LOGS**: Clear "FIXED" vs "OPTIMIZED" assignment logging for business intelligence
+## August 19, 2025 - Fixed Driver-Route Assignment Priority System Implementation
+- **NEW FEATURE**: Implemented fixed driver-route assignment table with priority-based optimization
+- **Database Enhancement**: Added `fixed_driver_routes` table for storing priority assignments
+- **Enhanced Optimizer**: Created `run_ortools_optimization_with_fixed_routes()` with two-phase process
+- **API Endpoints**: Added create, read, delete endpoints for fixed route management
+- **Hybrid Logic**: Fixed routes assigned first, remaining routes optimized via OR-Tools
+- **Fallback System**: If fixed driver unavailable, route automatically goes to optimization pool
+- **Priority Support**: Multiple drivers can be configured for same route with priority ordering
+- **Business Intelligence**: Transparent logging shows fixed vs optimized assignments
+- **Complete Integration**: All existing endpoints now use enhanced optimizer automatically
 
 ## August 13, 2025 - Complete Technical Documentation with Future Roadmap
 - **COMPREHENSIVE DOCUMENTATION**: Created detailed technical documentation for BubbleGPT Assistant workflow

@@ -172,10 +172,3 @@ class DatabaseService:
                 week_start
             )
             return json.loads(result) if result else None
-    
-    async def run_optimization_with_fixed_routes(self, drivers: List[Dict], routes: List[Dict], availability: List[Dict], fixed_routes: List[Dict]) -> Dict:
-        """Run OR-Tools optimization with fixed routes integration"""
-        from services.optimizer import run_ortools_optimization_with_fixed_routes
-        
-        # Run the enhanced optimization with fixed routes
-        return run_ortools_optimization_with_fixed_routes(drivers, routes, availability, fixed_routes)
