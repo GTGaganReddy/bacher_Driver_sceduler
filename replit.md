@@ -8,6 +8,15 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+## August 19, 2025 - CRITICAL BUG FIX: Optimizer Variable Reference Error
+- **CRITICAL FIX**: Resolved "cannot access local variable 'date_routes' where it is not associated with a value" error
+- **Bug Location**: Line 148 in services/optimizer.py was referencing variable before definition
+- **Impact**: Reset and weekly optimization functions were failing during OR-Tools execution
+- **Symptom**: Google Sheets updated with blank data instead of optimized assignments
+- **Resolution**: Moved `date_routes = routes_by_date[route_date]` assignment before its first use
+- **Result**: All 42 routes now successfully assign to drivers during optimization
+- **Verification**: Reset function now properly populates Google Sheets with complete driver schedules
+
 ## August 19, 2025 - Fixed Driver-Route Assignment Priority System Implementation
 - **NEW FEATURE**: Implemented fixed driver-route assignment table with priority-based optimization
 - **Database Enhancement**: Added `fixed_driver_routes` table for storing priority assignments
