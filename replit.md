@@ -8,6 +8,17 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+## August 19, 2025 - Fixed Driver-Route Assignment Priority System Implementation
+- **NEW FEATURE**: Implemented fixed driver-route assignment table with priority-based optimization
+- **Database Enhancement**: Added `fixed_driver_routes` table for storing priority assignments
+- **Enhanced Optimizer**: Created `run_ortools_optimization_with_fixed_routes()` with two-phase process
+- **API Endpoints**: Added create, read, delete endpoints for fixed route management
+- **Hybrid Logic**: Fixed routes assigned first, remaining routes optimized via OR-Tools
+- **Fallback System**: If fixed driver unavailable, route automatically goes to optimization pool
+- **Priority Support**: Multiple drivers can be configured for same route with priority ordering
+- **Business Intelligence**: Transparent logging shows fixed vs optimized assignments
+- **Complete Integration**: All existing endpoints now use enhanced optimizer automatically
+
 ## August 13, 2025 - Complete Technical Documentation with Future Roadmap
 - **COMPREHENSIVE DOCUMENTATION**: Created detailed technical documentation for BubbleGPT Assistant workflow
 - **Architecture Overview**: BubbleGPT → FastAPI Backend → PostgreSQL → OR-Tools → Google Cloud Function → Google Sheets

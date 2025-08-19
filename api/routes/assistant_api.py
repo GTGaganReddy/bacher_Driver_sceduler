@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from services.database import DatabaseService
 from services.google_sheets import GoogleSheetsService
-from services.optimizer import run_ortools_optimization, SchedulingOptimizer
+from services.optimizer import run_ortools_optimization, run_ortools_optimization_with_fixed_routes, SchedulingOptimizer
 from api.dependencies import db_manager
 
 logger = logging.getLogger(__name__)
@@ -55,6 +55,14 @@ class RemoveRouteRequest(BaseModel):
     date: str = Field(..., description="Route date (YYYY-MM-DD)")
 
 
+class FixedRouteRequest(BaseModel):
+    driver_name: str = Field(..., description="Driver name from database")
+    route_pattern: str = Field(..., description="Route pattern (e.g., '452SA', '431oS')")
+    priority: int = Field(default=1, description="Priority level (1 = highest)")
+    day_of_week: str = Field(default="any", description="Specific day or 'any'")
+    notes: str = Field(default="", description="Business reason for assignment")
+
+
 @router.post("/optimize-week")
 async def optimize_week(request: WeeklyOptimizationRequest):
     """Complete weekly optimization: DB -> OR-Tools -> Google Sheets"""
@@ -67,16 +75,17 @@ async def optimize_week(request: WeeklyOptimizationRequest):
         db_service = DatabaseService(db_manager)
         sheets_service = GoogleSheetsService()
         
-        # Fetch all data
+        # Fetch all data including fixed routes
         drivers = await db_service.get_drivers()
         routes = await db_service.get_routes_by_date_range(week_start, week_end)
         availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        fixed_routes = await db_service.get_fixed_driver_routes(week_start, week_end)
         
         if not drivers or not routes:
             raise HTTPException(status_code=404, detail="Missing drivers or routes data")
         
-        # Run OR-Tools optimization
-        optimization_result = run_ortools_optimization(drivers, routes, availability)
+        # Run enhanced OR-Tools optimization with fixed routes
+        optimization_result = run_ortools_optimization_with_fixed_routes(drivers, routes, availability, fixed_routes)
         
         # Generate complete driver grid for Google Sheets
         week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
@@ -464,12 +473,93 @@ async def get_status():
     try:
         db_service = DatabaseService(db_manager)
         drivers = await db_service.get_drivers()
+        fixed_routes = await db_service.get_fixed_driver_routes()
         
         return {
             "status": "operational",
             "drivers_count": len(drivers),
+            "fixed_routes_count": len(fixed_routes),
             "or_tools_enabled": True,
-            "google_sheets_integration": True
+            "google_sheets_integration": True,
+            "fixed_routes_enabled": True
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@router.post("/create-fixed-route")
+async def create_fixed_route(request: FixedRouteRequest):
+    """Create a new fixed driver-route assignment"""
+    try:
+        logger.info(f"Creating fixed route: {request.driver_name} -> {request.route_pattern}")
+        
+        db_service = DatabaseService(db_manager)
+        
+        # Find driver by name
+        drivers = await db_service.get_drivers()
+        driver = next((d for d in drivers if d['name'] == request.driver_name), None)
+        
+        if not driver:
+            raise HTTPException(status_code=404, detail=f"Driver '{request.driver_name}' not found")
+        
+        # Create fixed route assignment
+        fixed_route_id = await db_service.create_fixed_driver_route(
+            driver_id=driver['driver_id'],
+            route_pattern=request.route_pattern,
+            priority=request.priority,
+            day_of_week=request.day_of_week.lower() if request.day_of_week != "any" else "any",
+            notes=request.notes
+        )
+        
+        return {
+            "status": "success",
+            "message": f"Fixed route created: {request.driver_name} -> {request.route_pattern}",
+            "fixed_route_id": fixed_route_id,
+            "driver_name": request.driver_name,
+            "route_pattern": request.route_pattern,
+            "priority": request.priority,
+            "day_of_week": request.day_of_week
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create fixed route failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create fixed route: {str(e)}")
+
+
+@router.get("/fixed-routes")
+async def get_fixed_routes():
+    """Get all active fixed driver-route assignments"""
+    try:
+        db_service = DatabaseService(db_manager)
+        fixed_routes = await db_service.get_fixed_driver_routes()
+        
+        return {
+            "status": "success",
+            "fixed_routes": fixed_routes,
+            "count": len(fixed_routes)
+        }
+        
+    except Exception as e:
+        logger.error(f"Get fixed routes failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get fixed routes: {str(e)}")
+
+
+@router.delete("/fixed-routes/{fixed_route_id}")
+async def delete_fixed_route(fixed_route_id: int):
+    """Delete a fixed driver-route assignment"""
+    try:
+        logger.info(f"Deleting fixed route ID: {fixed_route_id}")
+        
+        db_service = DatabaseService(db_manager)
+        await db_service.delete_fixed_driver_route(fixed_route_id)
+        
+        return {
+            "status": "success",
+            "message": f"Fixed route ID {fixed_route_id} deleted successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Delete fixed route failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete fixed route: {str(e)}")

@@ -74,6 +74,75 @@ class DatabaseService:
             """, start_date, end_date)
             return [dict(row) for row in rows]
     
+    async def get_fixed_driver_routes(self, start_date: date = None, end_date: date = None) -> List[Dict]:
+        """Get active fixed driver-route assignments"""
+        async with self.db_manager.get_connection() as conn:
+            query = """
+                SELECT fdr.*, d.name as driver_name
+                FROM fixed_driver_routes fdr
+                JOIN drivers d ON fdr.driver_id = d.driver_id
+                WHERE fdr.is_active = true
+            """
+            params = []
+            
+            if start_date and end_date:
+                query += """
+                    AND (fdr.effective_start_date IS NULL OR fdr.effective_start_date <= $1)
+                    AND (fdr.effective_end_date IS NULL OR fdr.effective_end_date >= $2)
+                """
+                params.extend([end_date, start_date])
+            
+            query += " ORDER BY fdr.priority, fdr.route_pattern"
+            
+            rows = await conn.fetch(query, *params)
+            return [dict(row) for row in rows]
+    
+    async def create_fixed_driver_route(self, driver_id: int, route_pattern: str, 
+                                       priority: int = 1, day_of_week: str = None,
+                                       effective_start_date: date = None, 
+                                       effective_end_date: date = None,
+                                       notes: str = None) -> int:
+        """Create a new fixed driver-route assignment"""
+        async with self.db_manager.get_connection() as conn:
+            fixed_route_id = await conn.fetchval("""
+                INSERT INTO fixed_driver_routes 
+                (driver_id, route_pattern, priority, day_of_week, 
+                 effective_start_date, effective_end_date, notes)
+                VALUES ($1, $2, $3, $4, $5, $6, $7) 
+                RETURNING id
+            """, driver_id, route_pattern, priority, day_of_week,
+                effective_start_date, effective_end_date, notes)
+            return fixed_route_id
+    
+    async def update_fixed_driver_route(self, fixed_route_id: int, **kwargs):
+        """Update a fixed driver-route assignment"""
+        async with self.db_manager.get_connection() as conn:
+            set_clauses = []
+            params = []
+            param_index = 1
+            
+            for field, value in kwargs.items():
+                if field in ['driver_id', 'route_pattern', 'priority', 'day_of_week',
+                           'effective_start_date', 'effective_end_date', 'is_active', 'notes']:
+                    set_clauses.append(f"{field} = ${param_index}")
+                    params.append(value)
+                    param_index += 1
+            
+            if set_clauses:
+                set_clauses.append(f"updated_at = NOW()")
+                params.append(fixed_route_id)
+                query = f"""
+                    UPDATE fixed_driver_routes 
+                    SET {', '.join(set_clauses)}
+                    WHERE id = ${param_index}
+                """
+                await conn.execute(query, *params)
+    
+    async def delete_fixed_driver_route(self, fixed_route_id: int):
+        """Delete a fixed driver-route assignment"""
+        async with self.db_manager.get_connection() as conn:
+            await conn.execute("DELETE FROM fixed_driver_routes WHERE id = $1", fixed_route_id)
+    
     async def update_driver_availability(self, driver_id: int, availability_date: date, available: bool):
         """Update driver availability"""
         async with self.db_manager.get_connection() as conn:
