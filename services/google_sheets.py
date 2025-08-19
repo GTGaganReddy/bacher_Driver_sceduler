@@ -21,6 +21,20 @@ class GoogleSheetsService:
             
             # If all_drivers and all_dates provided, create complete driver grid
             if all_drivers and all_dates:
+                # Debug: Log assignment structure to diagnose the issue
+                logger.info(f"DEBUG: Assignments structure has {len(assignments)} date keys")
+                for date_key, date_assignments in assignments.items():
+                    if isinstance(date_assignments, dict):
+                        assigned_count = sum(1 for route_name, details in date_assignments.items() 
+                                          if details.get('status') == 'assigned' and not route_name.startswith('F_'))
+                        f_count = sum(1 for route_name, details in date_assignments.items() 
+                                    if route_name.startswith('F_'))
+                        logger.info(f"DEBUG: Date {date_key} has {assigned_count} regular assignments, {f_count} F entries, total {len(date_assignments)} entries")
+                        
+                        # Sample a few entries for debugging
+                        sample_entries = list(date_assignments.items())[:3]
+                        logger.info(f"DEBUG: Sample entries for {date_key}: {sample_entries}")
+                
                 # Create assignment lookup for quick access
                 assignment_lookup = {}
                 

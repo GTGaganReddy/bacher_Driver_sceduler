@@ -309,8 +309,13 @@ def run_ortools_optimization(drivers: List[Dict], routes: List[Dict], availabili
                             duration_hours = route_data['duration_hours']
                             duration_formatted = f"{int(duration_hours)}:{int((duration_hours % 1) * 60):02d}"
                             
-                            # Add actual route assignment (overwrites any F assignment for this driver)
-                            all_assignments[current_date][route_name] = {
+                            # Add actual route assignment (overwrites any F assignment for this driver)  
+                            # Convert current_date to string format for consistency
+                            date_key = current_date.strftime('%Y-%m-%d') if hasattr(current_date, 'strftime') else str(current_date)
+                            if date_key not in all_assignments:
+                                all_assignments[date_key] = {}
+                            
+                            all_assignments[date_key][route_name] = {
                                 'driver_name': driver_info[driver_id]['name'],
                                 'driver_id': driver_id,
                                 'route_id': route_id,
@@ -327,7 +332,8 @@ def run_ortools_optimization(drivers: List[Dict], routes: List[Dict], availabili
                             logger.info(f"Assigned {route_name} to {driver_info[driver_id]['name']} ({duration_hours}h). Remaining: {driver_remaining_hours[driver_id]:.1f}h")
                 
                 # Find unassigned routes for current date
-                assigned_route_names = {route_name for route_name, details in all_assignments[current_date].items() 
+                date_key = current_date.strftime('%Y-%m-%d') if hasattr(current_date, 'strftime') else str(current_date)
+                assigned_route_names = {route_name for route_name, details in all_assignments.get(date_key, {}).items() 
                                       if not route_name.startswith('F_') and details.get('status') == 'assigned'}
                 
                 for route_id in current_route_ids:
