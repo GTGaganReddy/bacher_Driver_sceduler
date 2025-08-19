@@ -30,16 +30,3 @@
 # - week_start: DATE NOT NULL
 # - assignments: JSONB NOT NULL
 # - created_at: TIMESTAMP DEFAULT NOW()
-
-# fixed_driver_routes table:
-# - id: SERIAL PRIMARY KEY
-# - driver_id: INT REFERENCES drivers(driver_id) ON DELETE CASCADE
-# - route_pattern: VARCHAR(50) NOT NULL (e.g., '452SA', '431oS')
-# - priority: INT DEFAULT 1 (1 = highest priority fixed assignment)
-# - day_of_week: VARCHAR(20) ('monday', 'tuesday', etc. or 'any')
-# - effective_start_date: DATE (when assignment becomes effective)
-# - effective_end_date: DATE (when assignment expires, NULL = permanent)
-# - is_active: BOOLEAN DEFAULT TRUE
-# - notes: TEXT (business reason for fixed assignment)
-# - created_at: TIMESTAMP DEFAULT NOW()
-# - updated_at: TIMESTAMP DEFAULT NOW()
