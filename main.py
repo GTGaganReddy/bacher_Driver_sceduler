@@ -16,15 +16,24 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting up Driver Scheduling Backend...")
-    try:
-        from api.dependencies import db_manager
-        await db_manager.init_pool()
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Database initialization failed: {e}")
-        # Don't fail startup - let health checks pass while DB connects async
-        logger.info("Continuing startup without database - will retry connections on API calls")
+    
+    # For deployment health checks, don't block startup on database initialization
+    # Database will be initialized lazily on first API call
+    if os.getenv("PORT"):  # Cloud Run sets PORT - indicates deployment
+        logger.info("Deployment environment detected - skipping blocking database initialization")
+        logger.info("Database will be initialized on first API call for faster health check response")
+    else:
+        # Local development - initialize database normally
+        try:
+            from api.dependencies import db_manager
+            await db_manager.init_pool()
+            logger.info("Database initialized successfully")
+        except Exception as e:
+            logger.error(f"Database initialization failed: {e}")
+            logger.info("Continuing startup without database - will retry connections on API calls")
+    
     yield
+    
     # Shutdown
     logger.info("Shutting down...")
     try:
