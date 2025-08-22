@@ -1,0 +1,723 @@
+{
+  "status": "success",
+  "week_start": "2025-07-07",
+  "total_assignments": 42,
+  "total_routes": 43,
+  "google_sheets_updated": true,
+  "solver_status": "ENHANCED_OPTIMAL",
+  "fixed_assignments_count": 36,
+  "assignments": {
+    "2025-07-07": {
+      "431oS": {
+        "driver_name": "Hinteregger, Manfred",
+        "driver_id": "4",
+        "route_id": "1",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "432oS": {
+        "driver_name": "Rauter, Agnes Zita",
+        "driver_id": "12",
+        "route_id": "2",
+        "duration_hours": 12,
+        "duration_formatted": "12:00",
+        "status": "assigned"
+      },
+      "433oS": {
+        "driver_name": "Niederbichler, Daniel",
+        "driver_id": "9",
+        "route_id": "3",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "434oS": {
+        "driver_name": "Kandolf, Alfred",
+        "driver_id": "5",
+        "route_id": "4",
+        "duration_hours": 10,
+        "duration_formatted": "10:00",
+        "status": "assigned"
+      },
+      "437oS": {
+        "driver_name": "Simon, Otto",
+        "driver_id": "13",
+        "route_id": "5",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "438oS": {
+        "driver_name": "Struckl, Stefan",
+        "driver_id": "15",
+        "route_id": "6",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "439oS": {
+        "driver_name": "Madrutter, Anton",
+        "driver_id": "8",
+        "route_id": "7",
+        "duration_hours": 12,
+        "duration_formatted": "12:00",
+        "status": "assigned"
+      },
+      "440oS": {
+        "driver_name": "Bandzi, Attila",
+        "driver_id": "14",
+        "route_id": "8",
+        "duration_hours": 3,
+        "duration_formatted": "3:00",
+        "status": "assigned"
+      }
+    },
+    "2025-07-08": {
+      "431oS": {
+        "driver_name": "Hinteregger, Manfred",
+        "driver_id": "4",
+        "route_id": "9",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "432oS": {
+        "driver_name": "Rauter, Agnes Zita",
+        "driver_id": "12",
+        "route_id": "10",
+        "duration_hours": 12,
+        "duration_formatted": "12:00",
+        "status": "assigned"
+      },
+      "433oS": {
+        "driver_name": "Niederbichler, Daniel",
+        "driver_id": "9",
+        "route_id": "11",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "434oS": {
+        "driver_name": "Kandolf, Alfred",
+        "driver_id": "5",
+        "route_id": "12",
+        "duration_hours": 10,
+        "duration_formatted": "10:00",
+        "status": "assigned"
+      },
+      "437oS": {
+        "driver_name": "Simon, Otto",
+        "driver_id": "13",
+        "route_id": "13",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "438oS": {
+        "driver_name": "Struckl, Stefan",
+        "driver_id": "15",
+        "route_id": "14",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "439oS": {
+        "driver_name": "Madrutter, Anton",
+        "driver_id": "8",
+        "route_id": "15",
+        "duration_hours": 12,
+        "duration_formatted": "12:00",
+        "status": "assigned"
+      },
+      "440oS": {
+        "driver_name": "Blaskovic, Nenad",
+        "driver_id": "1",
+        "route_id": "16",
+        "duration_hours": 3,
+        "duration_formatted": "3:00",
+        "status": "assigned"
+      }
+    },
+    "2025-07-09": {
+      "431oS": {
+        "driver_name": "Hinteregger, Manfred",
+        "driver_id": "4",
+        "route_id": "17",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "432oS": {
+        "driver_name": "Rauter, Agnes Zita",
+        "driver_id": "12",
+        "route_id": "18",
+        "duration_hours": 12,
+        "duration_formatted": "12:00",
+        "status": "assigned"
+      },
+      "433oS": {
+        "driver_name": "Niederbichler, Daniel",
+        "driver_id": "9",
+        "route_id": "19",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "434oS": {
+        "driver_name": "Kandolf, Alfred",
+        "driver_id": "5",
+        "route_id": "20",
+        "duration_hours": 10,
+        "duration_formatted": "10:00",
+        "status": "assigned"
+      },
+      "437oS": {
+        "driver_name": "Simon, Otto",
+        "driver_id": "13",
+        "route_id": "21",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "438oS": {
+        "driver_name": "Struckl, Stefan",
+        "driver_id": "15",
+        "route_id": "22",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "439oS": {
+        "driver_name": "Madrutter, Anton",
+        "driver_id": "8",
+        "route_id": "23",
+        "duration_hours": 12,
+        "duration_formatted": "12:00",
+        "status": "assigned"
+      },
+      "440oS": {
+        "driver_name": "Genäuß, Thomas",
+        "driver_id": "3",
+        "route_id": "24",
+        "duration_hours": 3,
+        "duration_formatted": "3:00",
+        "status": "assigned"
+      }
+    },
+    "2025-07-10": {
+      "431oS": {
+        "driver_name": "Konheiser, Elisabeth",
+        "driver_id": "6",
+        "route_id": "25",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "432oS": {
+        "driver_name": "Lauhart, Egon",
+        "driver_id": "7",
+        "route_id": "26",
+        "duration_hours": 12,
+        "duration_formatted": "12:00",
+        "status": "assigned"
+      },
+      "433oS": {
+        "driver_name": "Blaskovic, Nenad",
+        "driver_id": "1",
+        "route_id": "27",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "434oS": {
+        "driver_name": "Obersteiner, Roland",
+        "driver_id": "11",
+        "route_id": "28",
+        "duration_hours": 10,
+        "duration_formatted": "10:00",
+        "status": "assigned"
+      },
+      "437oS": {
+        "driver_name": "Nurikic, Ervin",
+        "driver_id": "10",
+        "route_id": "29",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "438oS": {
+        "driver_name": "Bandzi, Attila",
+        "driver_id": "14",
+        "route_id": "30",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "439oS": {
+        "driver_name": "Thamer, Karl",
+        "driver_id": "18",
+        "route_id": "31",
+        "duration_hours": 12,
+        "duration_formatted": "12:00",
+        "status": "assigned"
+      },
+      "440oS": {
+        "driver_name": "Genäuß, Thomas",
+        "driver_id": "3",
+        "route_id": "32",
+        "duration_hours": 3,
+        "duration_formatted": "3:00",
+        "status": "assigned"
+      }
+    },
+    "2025-07-11": {
+      "431oS": {
+        "driver_name": "Hinteregger, Manfred",
+        "driver_id": "4",
+        "route_id": "33",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "432oS": {
+        "driver_name": "Rauter, Agnes Zita",
+        "driver_id": "12",
+        "route_id": "34",
+        "duration_hours": 12,
+        "duration_formatted": "12:00",
+        "status": "assigned"
+      },
+      "433oS": {
+        "driver_name": "Niederbichler, Daniel",
+        "driver_id": "9",
+        "route_id": "35",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "434oS": {
+        "driver_name": "Kandolf, Alfred",
+        "driver_id": "5",
+        "route_id": "36",
+        "duration_hours": 10,
+        "duration_formatted": "10:00",
+        "status": "assigned"
+      },
+      "437oS": {
+        "driver_name": "Simon, Otto",
+        "driver_id": "13",
+        "route_id": "37",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "438oS": {
+        "driver_name": "Struckl, Stefan",
+        "driver_id": "15",
+        "route_id": "38",
+        "duration_hours": 11,
+        "duration_formatted": "11:00",
+        "status": "assigned"
+      },
+      "439oS": {
+        "driver_name": "Madrutter, Anton",
+        "driver_id": "8",
+        "route_id": "39",
+        "duration_hours": 12,
+        "duration_formatted": "12:00",
+        "status": "assigned"
+      },
+      "440oS": {
+        "driver_name": "Genäuß, Thomas",
+        "driver_id": "3",
+        "route_id": "40",
+        "duration_hours": 3,
+        "duration_formatted": "3:00",
+        "status": "assigned"
+      }
+    },
+    "2025-07-12": {
+      "451SA": {
+        "driver_name": "Klagenfurt - Fahrer",
+        "driver_id": "20",
+        "route_id": "41",
+        "duration_hours": 10,
+        "duration_formatted": "10:00",
+        "status": "assigned"
+      },
+      "452SA": {
+        "driver_name": "Klagenfurt - Samstagsfahrer",
+        "driver_id": "21",
+        "route_id": "42",
+        "duration_hours": 10,
+        "duration_formatted": "10:00",
+        "status": "assigned"
+      }
+    }
+  },
+  "fixed_assignments": [
+    {
+      "id": 1,
+      "driver_id": 4,
+      "route_id": 1,
+      "date": "2025-07-07",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Hinteregger, Manfred",
+      "route_name": "431oS"
+    },
+    {
+      "id": 4,
+      "driver_id": 5,
+      "route_id": 4,
+      "date": "2025-07-07",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Kandolf, Alfred",
+      "route_name": "434oS"
+    },
+    {
+      "id": 7,
+      "driver_id": 8,
+      "route_id": 7,
+      "date": "2025-07-07",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Madrutter, Anton",
+      "route_name": "439oS"
+    },
+    {
+      "id": 3,
+      "driver_id": 9,
+      "route_id": 3,
+      "date": "2025-07-07",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Niederbichler, Daniel",
+      "route_name": "433oS"
+    },
+    {
+      "id": 2,
+      "driver_id": 12,
+      "route_id": 2,
+      "date": "2025-07-07",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Rauter, Agnes Zita",
+      "route_name": "432oS"
+    },
+    {
+      "id": 5,
+      "driver_id": 13,
+      "route_id": 5,
+      "date": "2025-07-07",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Simon, Otto",
+      "route_name": "437oS"
+    },
+    {
+      "id": 6,
+      "driver_id": 15,
+      "route_id": 6,
+      "date": "2025-07-07",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Struckl, Stefan",
+      "route_name": "438oS"
+    },
+    {
+      "id": 8,
+      "driver_id": 4,
+      "route_id": 9,
+      "date": "2025-07-08",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Hinteregger, Manfred",
+      "route_name": "431oS"
+    },
+    {
+      "id": 11,
+      "driver_id": 5,
+      "route_id": 12,
+      "date": "2025-07-08",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Kandolf, Alfred",
+      "route_name": "434oS"
+    },
+    {
+      "id": 14,
+      "driver_id": 8,
+      "route_id": 15,
+      "date": "2025-07-08",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Madrutter, Anton",
+      "route_name": "439oS"
+    },
+    {
+      "id": 10,
+      "driver_id": 9,
+      "route_id": 11,
+      "date": "2025-07-08",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Niederbichler, Daniel",
+      "route_name": "433oS"
+    },
+    {
+      "id": 9,
+      "driver_id": 12,
+      "route_id": 10,
+      "date": "2025-07-08",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Rauter, Agnes Zita",
+      "route_name": "432oS"
+    },
+    {
+      "id": 12,
+      "driver_id": 13,
+      "route_id": 13,
+      "date": "2025-07-08",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Simon, Otto",
+      "route_name": "437oS"
+    },
+    {
+      "id": 13,
+      "driver_id": 15,
+      "route_id": 14,
+      "date": "2025-07-08",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Struckl, Stefan",
+      "route_name": "438oS"
+    },
+    {
+      "id": 15,
+      "driver_id": 4,
+      "route_id": 17,
+      "date": "2025-07-09",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Hinteregger, Manfred",
+      "route_name": "431oS"
+    },
+    {
+      "id": 18,
+      "driver_id": 5,
+      "route_id": 20,
+      "date": "2025-07-09",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Kandolf, Alfred",
+      "route_name": "434oS"
+    },
+    {
+      "id": 21,
+      "driver_id": 8,
+      "route_id": 23,
+      "date": "2025-07-09",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Madrutter, Anton",
+      "route_name": "439oS"
+    },
+    {
+      "id": 17,
+      "driver_id": 9,
+      "route_id": 19,
+      "date": "2025-07-09",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Niederbichler, Daniel",
+      "route_name": "433oS"
+    },
+    {
+      "id": 16,
+      "driver_id": 12,
+      "route_id": 18,
+      "date": "2025-07-09",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Rauter, Agnes Zita",
+      "route_name": "432oS"
+    },
+    {
+      "id": 19,
+      "driver_id": 13,
+      "route_id": 21,
+      "date": "2025-07-09",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Simon, Otto",
+      "route_name": "437oS"
+    },
+    {
+      "id": 20,
+      "driver_id": 15,
+      "route_id": 22,
+      "date": "2025-07-09",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Struckl, Stefan",
+      "route_name": "438oS"
+    },
+    {
+      "id": 22,
+      "driver_id": 4,
+      "route_id": 25,
+      "date": "2025-07-10",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Hinteregger, Manfred",
+      "route_name": "431oS"
+    },
+    {
+      "id": 25,
+      "driver_id": 5,
+      "route_id": 28,
+      "date": "2025-07-10",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Kandolf, Alfred",
+      "route_name": "434oS"
+    },
+    {
+      "id": 28,
+      "driver_id": 8,
+      "route_id": 31,
+      "date": "2025-07-10",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Madrutter, Anton",
+      "route_name": "439oS"
+    },
+    {
+      "id": 24,
+      "driver_id": 9,
+      "route_id": 27,
+      "date": "2025-07-10",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Niederbichler, Daniel",
+      "route_name": "433oS"
+    },
+    {
+      "id": 23,
+      "driver_id": 12,
+      "route_id": 26,
+      "date": "2025-07-10",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Rauter, Agnes Zita",
+      "route_name": "432oS"
+    },
+    {
+      "id": 26,
+      "driver_id": 13,
+      "route_id": 29,
+      "date": "2025-07-10",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Simon, Otto",
+      "route_name": "437oS"
+    },
+    {
+      "id": 27,
+      "driver_id": 15,
+      "route_id": 30,
+      "date": "2025-07-10",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Struckl, Stefan",
+      "route_name": "438oS"
+    },
+    {
+      "id": 29,
+      "driver_id": 4,
+      "route_id": 33,
+      "date": "2025-07-11",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Hinteregger, Manfred",
+      "route_name": "431oS"
+    },
+    {
+      "id": 32,
+      "driver_id": 5,
+      "route_id": 36,
+      "date": "2025-07-11",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Kandolf, Alfred",
+      "route_name": "434oS"
+    },
+    {
+      "id": 35,
+      "driver_id": 8,
+      "route_id": 39,
+      "date": "2025-07-11",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Madrutter, Anton",
+      "route_name": "439oS"
+    },
+    {
+      "id": 31,
+      "driver_id": 9,
+      "route_id": 35,
+      "date": "2025-07-11",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Niederbichler, Daniel",
+      "route_name": "433oS"
+    },
+    {
+      "id": 30,
+      "driver_id": 12,
+      "route_id": 34,
+      "date": "2025-07-11",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Rauter, Agnes Zita",
+      "route_name": "432oS"
+    },
+    {
+      "id": 33,
+      "driver_id": 13,
+      "route_id": 37,
+      "date": "2025-07-11",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Simon, Otto",
+      "route_name": "437oS"
+    },
+    {
+      "id": 34,
+      "driver_id": 15,
+      "route_id": 38,
+      "date": "2025-07-11",
+      "created_at": "2025-08-22T15:07:20.990568",
+      "updated_at": "2025-08-22T15:07:20.990568",
+      "driver_name": "Struckl, Stefan",
+      "route_name": "438oS"
+    },
+    {
+      "id": 36,
+      "driver_id": 20,
+      "route_id": 41,
+      "date": "2025-07-12",
+      "created_at": "2025-08-22T15:04:31.606597",
+      "updated_at": "2025-08-22T15:04:31.606597",
+      "driver_name": "Klagenfurt - Fahrer",
+      "route_name": "451SA"
+    }
+  ],
+  "stats": {},
+  "unassigned_routes": []
+}
