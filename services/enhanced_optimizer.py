@@ -283,8 +283,14 @@ class EnhancedDriverRouteOptimizer:
                 day_of_week = data.get('day_of_week', '').lower()
                 details = self.parse_json_details(data.get('details', '{}'))
                 
-                duration_str = details.get('duration', '8:00')
-                duration_hours = self.parse_time_string(duration_str)
+                # Check for duration_hours (number) first, then duration (time string)
+                if 'duration_hours' in details:
+                    duration_hours = float(details.get('duration_hours', 8.0))
+                elif 'duration' in details:
+                    duration_str = details.get('duration', '8:00')
+                    duration_hours = self.parse_time_string(duration_str)
+                else:
+                    duration_hours = 8.0
                 route_code = details.get('route_code', '')
                 route_type = details.get('type', 'delivery')
                 
