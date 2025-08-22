@@ -280,7 +280,7 @@ class EnhancedDriverRouteOptimizer:
                     date = date.strftime('%Y-%m-%d')
                 else:
                     date = str(date)
-                day_of_week = data.get('day_of_week', '').lower()
+                day_of_week = (data.get('day_of_week') or '').lower()
                 details = self.parse_json_details(data.get('details', '{}'))
                 
                 duration_str = details.get('duration', '8:00')
