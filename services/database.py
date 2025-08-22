@@ -76,21 +76,29 @@ class DatabaseService:
 
     async def get_fixed_assignments_by_date_range(self, start_date: date, end_date: date) -> List[Dict]:
         """Get fixed assignments within date range"""
-        print(f"DATABASE: Fetching fixed assignments for {start_date} to {end_date}")
-        async with self.db_manager.get_connection() as conn:
-            rows = await conn.fetch("""
-                SELECT fa.*, d.name as driver_name, r.route_name
-                FROM fixed_assignments fa
-                JOIN drivers d ON fa.driver_id = d.driver_id
-                JOIN routes r ON fa.route_id = r.route_id
-                WHERE fa.date BETWEEN $1 AND $2
-                ORDER BY fa.date, fa.driver_id
-            """, start_date, end_date)
-            result = [dict(row) for row in rows]
-            print(f"DATABASE: Fetched {len(result)} fixed assignments")
-            if result:
-                print(f"DATABASE: Sample fixed assignment: {result[0]}")
-            return result
+        try:
+            print(f"DATABASE: Fetching fixed assignments for {start_date} to {end_date}")
+            async with self.db_manager.get_connection() as conn:
+                # First, check if the table exists and has data
+                count = await conn.fetchval("SELECT COUNT(*) FROM fixed_assignments")
+                print(f"DATABASE: Total fixed assignments in table: {count}")
+                
+                rows = await conn.fetch("""
+                    SELECT fa.*, d.name as driver_name, r.route_name
+                    FROM fixed_assignments fa
+                    JOIN drivers d ON fa.driver_id = d.driver_id
+                    JOIN routes r ON fa.route_id = r.route_id
+                    WHERE fa.date BETWEEN $1 AND $2
+                    ORDER BY fa.date, fa.driver_id
+                """, start_date, end_date)
+                result = [dict(row) for row in rows]
+                print(f"DATABASE: Query returned {len(result)} fixed assignments")
+                if result:
+                    print(f"DATABASE: Sample fixed assignment: {result[0]}")
+                return result
+        except Exception as e:
+            print(f"DATABASE ERROR: Failed to fetch fixed assignments: {e}")
+            return []
     
     async def update_driver_availability(self, driver_id: int, availability_date: date, available: bool):
         """Update driver availability"""
