@@ -19,6 +19,11 @@ Preferred communication style: Simple, everyday language.
 - **✅ Database structure**: 36 fixed assignments properly stored with driver_id, route_id, date fields and correct JOINs
 - **✅ Production ready**: All 42 routes optimized successfully with fixed assignments constraints applied
 - **✅ Google Sheets sync**: Complete driver grid updated with optimized assignments respecting fixed constraints
+- **✅ CRUD endpoints complete**: Full fixed assignments management with GET, POST add, and POST delete endpoints
+- **✅ Fixed assignments API endpoints**: 
+  - `GET /api/v1/assistant/fixed-assignments` - View all fixed assignments
+  - `POST /api/v1/assistant/add-fixed-assignment` - Add new fixed assignment
+  - `POST /api/v1/assistant/delete-fixed-assignment` - Remove fixed assignment
 - **Key drivers with fixed assignments**: Hinteregger Manfred, Rauter Agnes Zita, Niederbichler Daniel, and others across weekdays
 - **System architecture**: BubbleGPT → FastAPI Backend → PostgreSQL → Enhanced OR-Tools → Fixed Assignments → Google Sheets
 

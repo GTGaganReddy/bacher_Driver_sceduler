@@ -56,6 +56,17 @@ class RemoveRouteRequest(BaseModel):
     date: str = Field(..., description="Route date (YYYY-MM-DD)")
 
 
+class FixedAssignmentRequest(BaseModel):
+    driver_name: str = Field(..., description="Driver name from database")
+    route_name: str = Field(..., description="Route name (e.g., '431oS')")
+    date: str = Field(..., description="Assignment date (YYYY-MM-DD)")
+
+
+class DeleteFixedAssignmentRequest(BaseModel):
+    driver_name: str = Field(..., description="Driver name from database")
+    date: str = Field(..., description="Assignment date (YYYY-MM-DD)")
+
+
 @router.post("/test-endpoint")
 async def test_endpoint():
     """Test endpoint to verify our code is working"""
@@ -502,3 +513,107 @@ async def get_status():
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@router.get("/fixed-assignments")
+async def get_fixed_assignments():
+    """Get all fixed route assignments"""
+    try:
+        logger.info("Assistant API: Fetching all fixed assignments")
+        
+        db_service = DatabaseService(db_manager)
+        fixed_assignments = await db_service.get_all_fixed_assignments()
+        
+        return {
+            "status": "success",
+            "fixed_assignments": fixed_assignments,
+            "count": len(fixed_assignments)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to fetch fixed assignments: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add-fixed-assignment")
+async def add_fixed_assignment(request: FixedAssignmentRequest):
+    """Add a new fixed route assignment"""
+    try:
+        logger.info(f"Assistant API: Adding fixed assignment - {request.driver_name} to {request.route_name} on {request.date}")
+        
+        db_service = DatabaseService(db_manager)
+        
+        # Get driver by name
+        driver = await db_service.get_driver_by_name(request.driver_name)
+        if not driver:
+            raise HTTPException(status_code=404, detail=f"Driver '{request.driver_name}' not found")
+        
+        # Get route by name and date
+        assignment_date = datetime.strptime(request.date, "%Y-%m-%d").date()
+        route = await db_service.get_route_by_name_and_date(request.route_name, assignment_date)
+        if not route:
+            raise HTTPException(status_code=404, detail=f"Route '{request.route_name}' on {request.date} not found")
+        
+        # Add fixed assignment
+        success = await db_service.add_fixed_assignment(
+            driver_id=driver['driver_id'],
+            route_id=route['route_id'],
+            assignment_date=assignment_date
+        )
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to add fixed assignment")
+        
+        return {
+            "status": "success",
+            "message": f"Fixed assignment added: {request.driver_name} → {request.route_name} on {request.date}",
+            "assignment": {
+                "driver_name": request.driver_name,
+                "driver_id": driver['driver_id'],
+                "route_name": request.route_name,
+                "route_id": route['route_id'],
+                "date": request.date
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to add fixed assignment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/delete-fixed-assignment")
+async def delete_fixed_assignment(request: DeleteFixedAssignmentRequest):
+    """Delete a fixed route assignment"""
+    try:
+        logger.info(f"Assistant API: Deleting fixed assignment for {request.driver_name} on {request.date}")
+        
+        db_service = DatabaseService(db_manager)
+        
+        # Get driver by name
+        driver = await db_service.get_driver_by_name(request.driver_name)
+        if not driver:
+            raise HTTPException(status_code=404, detail=f"Driver '{request.driver_name}' not found")
+        
+        # Delete fixed assignment
+        assignment_date = datetime.strptime(request.date, "%Y-%m-%d").date()
+        success = await db_service.delete_fixed_assignment(
+            driver_id=driver['driver_id'],
+            assignment_date=assignment_date
+        )
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete fixed assignment")
+        
+        return {
+            "status": "success",
+            "message": f"Fixed assignment deleted: {request.driver_name} on {request.date}",
+            "deleted_assignment": {
+                "driver_name": request.driver_name,
+                "driver_id": driver['driver_id'],
+                "date": request.date
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to delete fixed assignment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

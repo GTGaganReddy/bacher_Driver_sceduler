@@ -100,6 +100,81 @@ class DatabaseService:
             print(f"DATABASE ERROR: Failed to fetch fixed assignments: {e}")
             return []
     
+    async def get_all_fixed_assignments(self) -> List[Dict]:
+        """Get all fixed assignments with driver and route details"""
+        try:
+            async with self.db_manager.get_connection() as conn:
+                rows = await conn.fetch("""
+                    SELECT fa.*, d.name as driver_name, r.route_name
+                    FROM fixed_assignments fa
+                    JOIN drivers d ON fa.driver_id = d.driver_id
+                    JOIN routes r ON fa.route_id = r.route_id
+                    ORDER BY fa.date, d.name
+                """)
+                return [dict(row) for row in rows]
+        except Exception as e:
+            print(f"DATABASE ERROR: Failed to fetch all fixed assignments: {e}")
+            return []
+    
+    async def add_fixed_assignment(self, driver_id: int, route_id: int, assignment_date: date) -> bool:
+        """Add a new fixed assignment"""
+        try:
+            async with self.db_manager.get_connection() as conn:
+                # Check if this exact combination already exists
+                existing = await conn.fetchval("""
+                    SELECT id FROM fixed_assignments 
+                    WHERE driver_id = $1 AND route_id = $2 AND date = $3
+                """, driver_id, route_id, assignment_date)
+                
+                if existing:
+                    print(f"DATABASE: Fixed assignment already exists with ID {existing}")
+                    return True
+                
+                # Delete any existing assignment for this driver on this date
+                await conn.execute("""
+                    DELETE FROM fixed_assignments 
+                    WHERE driver_id = $1 AND date = $2
+                """, driver_id, assignment_date)
+                
+                # Insert new assignment
+                await conn.execute("""
+                    INSERT INTO fixed_assignments (driver_id, route_id, date)
+                    VALUES ($1, $2, $3)
+                """, driver_id, route_id, assignment_date)
+                return True
+        except Exception as e:
+            print(f"DATABASE ERROR: Failed to add fixed assignment: {e}")
+            return False
+    
+    async def delete_fixed_assignment(self, driver_id: int, assignment_date: date) -> bool:
+        """Delete a fixed assignment"""
+        try:
+            async with self.db_manager.get_connection() as conn:
+                result = await conn.execute("""
+                    DELETE FROM fixed_assignments 
+                    WHERE driver_id = $1 AND date = $2
+                """, driver_id, assignment_date)
+                return True
+        except Exception as e:
+            print(f"DATABASE ERROR: Failed to delete fixed assignment: {e}")
+            return False
+    
+    async def get_driver_by_name(self, driver_name: str) -> Optional[Dict]:
+        """Get driver by name"""
+        async with self.db_manager.get_connection() as conn:
+            row = await conn.fetchrow("""
+                SELECT * FROM drivers WHERE name = $1
+            """, driver_name)
+            return dict(row) if row else None
+    
+    async def get_route_by_name_and_date(self, route_name: str, route_date: date) -> Optional[Dict]:
+        """Get route by name and date"""
+        async with self.db_manager.get_connection() as conn:
+            row = await conn.fetchrow("""
+                SELECT * FROM routes WHERE route_name = $1 AND date = $2
+            """, route_name, route_date)
+            return dict(row) if row else None
+    
     async def update_driver_availability(self, driver_id: int, availability_date: date, available: bool):
         """Update driver availability"""
         async with self.db_manager.get_connection() as conn:
