@@ -1,0 +1,30 @@
+name = "driver-scheduling-api"
+main = "main.py"
+compatibility_date = "2024-08-01"
+
+[env.production]
+name = "driver-scheduling-api-prod"
+
+[env.staging]
+name = "driver-scheduling-api-staging"
+
+# Environment variables will be set via Cloudflare Dashboard or CLI
+# Use: wrangler secret put <SECRET_NAME>
+
+# Required secrets (set these in Cloudflare Dashboard):
+# - DATABASE_URL
+# - SUPABASE_PASSWORD  
+# - SUPABASE_URL
+# - SUPABASE_KEY
+# - GCF_URL
+# - DEBUG
+# - LOG_LEVEL
+
+[build]
+command = "pip install -r requirements.txt"
+
+[vars]
+PORT = "8000"
+WEEK_DAYS = "7"
+DEBUG = "false"
+LOG_LEVEL = "INFO"
