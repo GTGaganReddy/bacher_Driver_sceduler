@@ -252,14 +252,23 @@ class EnhancedDriverRouteOptimizer:
         # Create fixed assignments lookup
         fixed_assignments_lookup = {}
         if fixed_assignments_data:
+            logger.info(f"Loading {len(fixed_assignments_data)} fixed assignments...")
             for assignment in fixed_assignments_data:
                 route_id = assignment.get('route_id')
                 date = assignment.get('date')
+                # Ensure date is a string
+                if hasattr(date, 'strftime'):
+                    date = date.strftime('%Y-%m-%d')
+                else:
+                    date = str(date)
                 driver_id = str(assignment.get('driver_id'))
                 
                 if route_id and date and driver_id:
                     key = (route_id, date)
                     fixed_assignments_lookup[key] = driver_id
+                    logger.info(f"Fixed assignment: Route {route_id} on {date} -> Driver {driver_id}")
+        
+        logger.info(f"Created fixed assignments lookup with {len(fixed_assignments_lookup)} entries")
         
         for data in route_data:
             try:
@@ -629,6 +638,7 @@ class EnhancedDriverRouteOptimizer:
 
 
 def run_enhanced_ortools_optimization(drivers: List[Dict], routes: List[Dict], availability: List[Dict], fixed_assignments_data: List[Dict] = None) -> Dict:
+    print(f"ENHANCED OPTIMIZER: Called with {len(fixed_assignments_data) if fixed_assignments_data else 0} fixed assignments")
     """
     Enhanced OR-Tools optimization with consecutive hours constraint and system output format compatibility
     Returns format compatible with existing Google Sheets service

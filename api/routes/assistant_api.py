@@ -56,10 +56,17 @@ class RemoveRouteRequest(BaseModel):
     date: str = Field(..., description="Route date (YYYY-MM-DD)")
 
 
+@router.post("/test-endpoint")
+async def test_endpoint():
+    """Test endpoint to verify our code is working"""
+    print("TEST ENDPOINT IS WORKING!")
+    return {"message": "Test endpoint is working!", "timestamp": "2025-08-22"}
+
 @router.post("/optimize-week")
 async def optimize_week(request: WeeklyOptimizationRequest):
     """Complete weekly optimization: DB -> OR-Tools -> Google Sheets"""
     try:
+        print("CRITICAL DEBUG: Assistant API endpoint is executing!")
         logger.info(f"Assistant API: Weekly optimization for {request.week_start}")
         
         week_start = datetime.strptime(request.week_start, '%Y-%m-%d').date()
@@ -77,7 +84,15 @@ async def optimize_week(request: WeeklyOptimizationRequest):
             raise HTTPException(status_code=404, detail="Missing drivers or routes data")
         
         # Get fixed assignments from database
-        fixed_assignments = await db_service.get_fixed_assignments_by_date_range(week_start, week_end)
+        logger.info(f"Assistant API: About to fetch fixed assignments for range {week_start} to {week_end}")
+        try:
+            fixed_assignments = await db_service.get_fixed_assignments_by_date_range(week_start, week_end)
+            logger.info(f"Assistant API: Fetched {len(fixed_assignments)} fixed assignments from database")
+            if fixed_assignments:
+                logger.info(f"Assistant API: Sample fixed assignment: {fixed_assignments[0]}")
+        except Exception as e:
+            logger.error(f"Assistant API: Error fetching fixed assignments: {e}")
+            fixed_assignments = []
         
         # Run ENHANCED OR-Tools optimization with consecutive hours constraint
         optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability, fixed_assignments)
@@ -103,7 +118,8 @@ async def optimize_week(request: WeeklyOptimizationRequest):
             "total_assignments": sum(len(day_assignments) for day_assignments in assignments.values()),
             "total_routes": len(routes),
             "google_sheets_updated": sheets_success,
-            "solver_status": optimization_result.get('solver_status')
+            "solver_status": optimization_result.get('solver_status'),
+            "fixed_assignments_count": len(fixed_assignments)  # DEBUG: This should show the actual count
         }
         
     except Exception as e:

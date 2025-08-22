@@ -8,20 +8,18 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
-## August 22, 2025 - Enhanced OR-Tools Optimizer Integration Complete with Fixed Assignments
-- **MAJOR UPGRADE**: Successfully integrated enhanced OR-Tools optimizer with consecutive hours constraints
-- **Fixed assignments database table**: Created `fixed_assignments` table with 36 predefined driver-route assignments
-- **Database integration**: All API endpoints now fetch and use fixed assignments for optimization
-- **Day-by-day optimization**: True sequential processing that optimizes each date chronologically (July 7→8→9→10→11→12)
-- **Advanced constraint handling**: 48-hour weekly limits, 36-hour consecutive working constraints, capacity tracking
-- **Fixed date format issues**: Resolved datetime/string inconsistencies between database and optimizer
-- **Complete workflow verification**: Reset function → Enhanced optimization → Google Sheets sync all working perfectly
-- **Performance improvement**: More realistic scheduling with dynamic hour consumption between days
-- **Special constraints preserved**: Saturday route "452SA" still correctly assigned to "Klagenfurt - Samstagsfahrer"
-- **All API endpoints updated**: Six OpenAI Assistant endpoints now use enhanced optimizer with fixed assignments
-- **Production ready**: 42 routes optimized successfully, Google Sheets showing "42 assigned, 0 F entries, 105 blank"
-- **Dynamic route handling**: Add/remove routes with automatic reoptimization using enhanced algorithm
-- **Fixed assignments working**: Predefined assignments for 7 drivers across weekdays and 1 driver for Saturday routes
+## August 22, 2025 - Fixed Assignments Database Connection Issue Identified
+- **CRITICAL ISSUE DISCOVERED**: API endpoints return `fixed_assignments_count: 0` despite database containing 36 fixed assignments
+- **Root cause**: Database connection isolation - direct SQL queries show 36 rows, but API database service returns 0
+- **API endpoint verification**: Successfully confirmed `/api/v1/assistant/optimize-week` endpoint is working after server restart
+- **Router registration fixed**: Assistant API router was not loading properly, resolved with server restart
+- **Debug infrastructure**: Added comprehensive logging to track fixed assignments flow through the system
+- **Function naming conflict resolved**: Renamed old `run_enhanced_ortools_optimization` to avoid import conflicts
+- **Enhanced optimizer integration**: OR-Tools with consecutive hours constraints working correctly
+- **Database verification**: 36 fixed assignments exist in database with correct structure and data
+- **Pending fix**: Need to resolve database connection isolation preventing API from accessing fixed assignments data
+- **Fixed assignments table structure**: Correctly created with driver_id, route_id, date fields and proper JOINs
+- **Day-by-day optimization**: Enhanced optimizer working but not receiving fixed assignments due to DB connection issue
 
 ## August 13, 2025 - Complete Technical Documentation with Future Roadmap
 - **COMPREHENSIVE DOCUMENTATION**: Created detailed technical documentation for BubbleGPT Assistant workflow
