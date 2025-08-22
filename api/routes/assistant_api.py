@@ -130,7 +130,11 @@ async def optimize_week(request: WeeklyOptimizationRequest):
             "total_routes": len(routes),
             "google_sheets_updated": sheets_success,
             "solver_status": optimization_result.get('solver_status'),
-            "fixed_assignments_count": len(fixed_assignments)  # DEBUG: This should show the actual count
+            "fixed_assignments_count": len(fixed_assignments),
+            "assignments": assignments,  # Full assignment details by date
+            "fixed_assignments": fixed_assignments,  # All fixed assignments details
+            "stats": optimization_result.get('stats', {}),  # Optimizer statistics
+            "unassigned_routes": optimization_result.get('unassigned_routes', [])  # Routes that couldn't be assigned
         }
         
     except Exception as e:
@@ -204,7 +208,11 @@ async def update_availability(request: AvailabilityUpdateRequest):
             "driver_updated": request.driver_name,
             "updates_applied": updates_made,
             "total_assignments": sum(len(day_assignments) for day_assignments in assignments.values()),
-            "google_sheets_updated": sheets_success
+            "google_sheets_updated": sheets_success,
+            "assignments": assignments,  # Full assignment details by date
+            "fixed_assignments": fixed_assignments,  # All fixed assignments details
+            "stats": optimization_result.get('stats', {}),  # Optimizer statistics
+            "unassigned_routes": optimization_result.get('unassigned_routes', [])  # Routes that couldn't be assigned
         }
         
     except Exception as e:
@@ -288,7 +296,11 @@ async def add_route(request: RouteRequest):
             },
             "total_assignments": sum(len(day_assignments) for day_assignments in assignments.values()),
             "total_routes": len(routes),
-            "google_sheets_updated": sheets_success
+            "google_sheets_updated": sheets_success,
+            "assignments": assignments,  # Full assignment details by date
+            "fixed_assignments": fixed_assignments,  # All fixed assignments details
+            "stats": optimization_result.get('stats', {}),  # Optimizer statistics
+            "unassigned_routes": optimization_result.get('unassigned_routes', [])  # Routes that couldn't be assigned
         }
         
     except Exception as e:
@@ -379,7 +391,11 @@ async def remove_route(request: RemoveRouteRequest):
             },
             "total_assignments": sum(len(day_assignments) for day_assignments in assignments.values()),
             "total_routes": len(routes),
-            "google_sheets_updated": sheets_success
+            "google_sheets_updated": sheets_success,
+            "assignments": assignments,  # Full assignment details by date
+            "fixed_assignments": fixed_assignments,  # All fixed assignments details
+            "stats": optimization_result.get('stats', {}),  # Optimizer statistics
+            "unassigned_routes": optimization_result.get('unassigned_routes', [])  # Routes that couldn't be assigned
         }
         
     except Exception as e:
@@ -443,18 +459,16 @@ async def reset_system():
             datetime.strptime('2025-07-13', '%Y-%m-%d').date()
         )
         
+        # Get fixed assignments for both cases
+        week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
+        week_end = datetime.strptime('2025-07-13', '%Y-%m-%d').date()
+        fixed_assignments = await db_service.get_fixed_assignments_by_date_range(week_start, week_end)
+
         if routes:
-            # Get fixed assignments from database
-            fixed_assignments = await db_service.get_fixed_assignments_by_date_range(
-                datetime.strptime('2025-07-07', '%Y-%m-%d').date(),
-                datetime.strptime('2025-07-13', '%Y-%m-%d').date()
-            )
-            
             # Run ENHANCED optimization with consecutive hours constraint
             optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability, fixed_assignments)
             
             # Update Google Sheets with reset state
-            week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
             week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
             sheets_result = await sheets_service.update_sheet(
                 optimization_result,
@@ -470,15 +484,15 @@ async def reset_system():
             logger.info(f"Reset complete: optimized {len(routes)} routes, updated sheets: {sheets_updated}")
         else:
             # No routes - just clear sheets with empty data
-            week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
             week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
-            empty_result = {"assignments": {}, "stats": {"total_routes": 0, "assigned_routes": 0}}
+            optimization_result = {"assignments": {}, "stats": {"total_routes": 0, "assigned_routes": 0}, "unassigned_routes": []}
             sheets_result = await sheets_service.update_sheet(
-                empty_result,
+                optimization_result,
                 all_drivers=drivers,
                 all_dates=week_dates
             )
             sheets_updated = sheets_result is not None
+            assignments = {}
             logger.info(f"Reset complete: no routes to optimize, cleared sheets: {sheets_updated}")
         
         return {
@@ -490,7 +504,11 @@ async def reset_system():
             "availability_reset": True,
             "routes_reset": True,
             "optimization_run": True,
-            "sheets_updated": sheets_updated
+            "sheets_updated": sheets_updated,
+            "assignments": assignments,  # Full assignment details by date
+            "fixed_assignments": fixed_assignments,  # All fixed assignments details
+            "stats": optimization_result.get('stats', {}),  # Optimizer statistics
+            "unassigned_routes": optimization_result.get('unassigned_routes', [])  # Routes that couldn't be assigned
         }
         
     except Exception as e:
