@@ -67,59 +67,59 @@ DEFAULT_FIXED_ASSIGNMENTS = [
 
 # Original system routes for July 7-13, 2025 (42 routes)
 ORIGINAL_ROUTES_BACKUP = [
-    # Monday 2025-07-07 (6 routes)
-    {"date": "2025-07-07", "route_name": "401MO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-07", "route_name": "402MO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-07", "route_name": "403MO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-07", "route_name": "404MO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-07", "route_name": "405MO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-07", "route_name": "406MO", "details": {"duration_hours": 8, "type": "regular"}},
+    # Monday 2025-07-07 (8 routes)
+    {"date": "2025-07-07", "route_name": "431oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-07", "route_name": "432oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-07", "route_name": "433oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-07", "route_name": "434oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-07", "route_name": "437oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-07", "route_name": "438oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-07", "route_name": "439oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-07", "route_name": "440oS", "details": {"duration_hours": 8, "type": "regular"}},
     
-    # Tuesday 2025-07-08 (6 routes)
-    {"date": "2025-07-08", "route_name": "411DI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-08", "route_name": "412DI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-08", "route_name": "413DI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-08", "route_name": "414DI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-08", "route_name": "415DI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-08", "route_name": "416DI", "details": {"duration_hours": 8, "type": "regular"}},
+    # Tuesday 2025-07-08 (8 routes)
+    {"date": "2025-07-08", "route_name": "431oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-08", "route_name": "432oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-08", "route_name": "433oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-08", "route_name": "434oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-08", "route_name": "437oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-08", "route_name": "438oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-08", "route_name": "439oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-08", "route_name": "440oS", "details": {"duration_hours": 8, "type": "regular"}},
     
-    # Wednesday 2025-07-09 (6 routes)
-    {"date": "2025-07-09", "route_name": "421MI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-09", "route_name": "422MI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-09", "route_name": "423MI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-09", "route_name": "424MI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-09", "route_name": "425MI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-09", "route_name": "426MI", "details": {"duration_hours": 8, "type": "regular"}},
+    # Wednesday 2025-07-09 (8 routes)
+    {"date": "2025-07-09", "route_name": "431oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-09", "route_name": "432oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-09", "route_name": "433oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-09", "route_name": "434oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-09", "route_name": "437oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-09", "route_name": "438oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-09", "route_name": "439oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-09", "route_name": "440oS", "details": {"duration_hours": 8, "type": "regular"}},
     
-    # Thursday 2025-07-10 (6 routes)
-    {"date": "2025-07-10", "route_name": "431DO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-10", "route_name": "432DO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-10", "route_name": "433DO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-10", "route_name": "434DO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-10", "route_name": "435DO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-10", "route_name": "436DO", "details": {"duration_hours": 8, "type": "regular"}},
+    # Thursday 2025-07-10 (8 routes)
+    {"date": "2025-07-10", "route_name": "431oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-10", "route_name": "432oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-10", "route_name": "433oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-10", "route_name": "434oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-10", "route_name": "437oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-10", "route_name": "438oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-10", "route_name": "439oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-10", "route_name": "440oS", "details": {"duration_hours": 8, "type": "regular"}},
     
-    # Friday 2025-07-11 (6 routes)
-    {"date": "2025-07-11", "route_name": "441FR", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-11", "route_name": "442FR", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-11", "route_name": "443FR", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-11", "route_name": "444FR", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-11", "route_name": "445FR", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-11", "route_name": "446FR", "details": {"duration_hours": 8, "type": "regular"}},
+    # Friday 2025-07-11 (8 routes)
+    {"date": "2025-07-11", "route_name": "431oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-11", "route_name": "432oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-11", "route_name": "433oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-11", "route_name": "434oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-11", "route_name": "437oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-11", "route_name": "438oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-11", "route_name": "439oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"date": "2025-07-11", "route_name": "440oS", "details": {"duration_hours": 8, "type": "regular"}},
     
-    # Saturday 2025-07-12 (12 routes)
+    # Saturday 2025-07-12 (2 routes)
     {"date": "2025-07-12", "route_name": "451SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "452SA", "details": {"duration_hours": 8, "type": "special", "assigned_driver": "Klagenfurt - Samstagsfahrer"}},
-    {"date": "2025-07-12", "route_name": "453SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "454SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "455SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "456SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "457SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "458SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "459SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "460SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "461SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "462SA", "details": {"duration_hours": 8, "type": "regular"}}
+    {"date": "2025-07-12", "route_name": "452SA", "details": {"duration_hours": 8, "type": "regular"}}
 ]
 
 class RouteBackupManager:
