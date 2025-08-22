@@ -405,11 +405,15 @@ async def remove_route(request: RemoveRouteRequest):
 
 @router.post("/reset")
 async def reset_system():
-    """Reset system to initial state - clear assignments and reset availability"""
+    """Reset system to initial state with route recovery - clear assignments, reset availability, restore missing routes"""
     try:
-        logger.info("Assistant API: Resetting system to initial state")
+        logger.info("Assistant API: Resetting system to initial state with route recovery")
         
         db_service = DatabaseService(db_manager)
+        
+        # Import route backup manager
+        from database.route_backup import RouteBackupManager
+        backup_manager = RouteBackupManager(db_manager)
         
         # Clear all assignments
         async with db_manager.get_connection() as conn:
@@ -441,6 +445,16 @@ async def reset_system():
             """)
             
             logger.info("Reset driver availability - weekdays available, Sunday unavailable")
+        
+        # Check for missing original routes and restore them
+        missing_routes = await backup_manager.check_missing_routes()
+        restored_count = 0
+        if missing_routes:
+            logger.warning(f"Found {len(missing_routes)} missing original routes - restoring them")
+            restored_count = await backup_manager.restore_missing_routes()
+            logger.info(f"Restored {restored_count} missing original routes")
+        else:
+            logger.info("All original routes are present - no restoration needed")
         
         # Get fresh data for verification
         drivers = await db_service.get_drivers()
@@ -497,12 +511,14 @@ async def reset_system():
         
         return {
             "status": "success",
-            "message": "System reset to initial state and optimization completed",
+            "message": "System reset to initial state with route recovery and optimization completed",
             "drivers_count": len(drivers),
             "routes_count": len(routes),
             "assignments_cleared": True,
             "availability_reset": True,
             "routes_reset": True,
+            "missing_routes_found": len(missing_routes),
+            "routes_restored": restored_count,
             "optimization_run": True,
             "sheets_updated": sheets_updated,
             "assignments": assignments,  # Full assignment details by date
@@ -531,6 +547,43 @@ async def get_status():
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@router.post("/recover-routes")
+async def recover_missing_routes():
+    """Check for and restore any missing original system routes"""
+    try:
+        logger.info("Assistant API: Checking and recovering missing routes")
+        
+        from database.route_backup import RouteBackupManager
+        backup_manager = RouteBackupManager(db_manager)
+        
+        # Check for missing routes
+        missing_routes = await backup_manager.check_missing_routes()
+        
+        if not missing_routes:
+            return {
+                "status": "success",
+                "message": "All original routes are present - no recovery needed",
+                "missing_routes_found": 0,
+                "routes_restored": 0,
+                "missing_routes": []
+            }
+        
+        # Restore missing routes
+        restored_count = await backup_manager.restore_missing_routes()
+        
+        return {
+            "status": "success",
+            "message": f"Route recovery completed - restored {restored_count} missing routes",
+            "missing_routes_found": len(missing_routes),
+            "routes_restored": restored_count,
+            "missing_routes": missing_routes
+        }
+        
+    except Exception as e:
+        logger.error(f"Route recovery failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/fixed-assignments")
