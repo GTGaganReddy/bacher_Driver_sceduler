@@ -65,61 +65,63 @@ DEFAULT_FIXED_ASSIGNMENTS = [
     {"driver_id": 20, "route_id": 41, "date": "2025-07-12"}  # Saturday 451SA
 ]
 
-# Original system routes for July 7-13, 2025 (42 routes)
+# Original system routes for July 7-13, 2025 (42 routes: 8 routes × 5 weekdays + 2 Saturday routes)
 ORIGINAL_ROUTES_BACKUP = [
-    # Monday 2025-07-07 (6 routes)
-    {"date": "2025-07-07", "route_name": "401MO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-07", "route_name": "402MO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-07", "route_name": "403MO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-07", "route_name": "404MO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-07", "route_name": "405MO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-07", "route_name": "406MO", "details": {"duration_hours": 8, "type": "regular"}},
+    # Monday 2025-07-07 (8 routes) - route_id 1-8
+    {"route_id": 1, "date": "2025-07-07", "route_name": "431oS", "details": {"duration_hours": 11, "type": "regular"}},
+    {"route_id": 2, "date": "2025-07-07", "route_name": "432oS", "details": {"duration_hours": 12, "type": "regular"}},
+    {"route_id": 3, "date": "2025-07-07", "route_name": "433oS", "details": {"duration_hours": 11, "type": "regular"}},
+    {"route_id": 4, "date": "2025-07-07", "route_name": "434oS", "details": {"duration_hours": 12, "type": "regular"}},
+    {"route_id": 5, "date": "2025-07-07", "route_name": "435oS", "details": {"duration_hours": 12, "type": "regular"}},
+    {"route_id": 6, "date": "2025-07-07", "route_name": "436oS", "details": {"duration_hours": 12, "type": "regular"}},
+    {"route_id": 7, "date": "2025-07-07", "route_name": "437oS", "details": {"duration_hours": 12, "type": "regular"}},
+    {"route_id": 8, "date": "2025-07-07", "route_name": "438oS", "details": {"duration_hours": 12, "type": "regular"}},
     
-    # Tuesday 2025-07-08 (6 routes)
-    {"date": "2025-07-08", "route_name": "411DI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-08", "route_name": "412DI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-08", "route_name": "413DI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-08", "route_name": "414DI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-08", "route_name": "415DI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-08", "route_name": "416DI", "details": {"duration_hours": 8, "type": "regular"}},
+    # Tuesday 2025-07-08 (6 routes) - route_id 7-12
+    {"route_id": 7, "date": "2025-07-08", "route_name": "431oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 8, "date": "2025-07-08", "route_name": "432oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 9, "date": "2025-07-08", "route_name": "433oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 10, "date": "2025-07-08", "route_name": "434oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 11, "date": "2025-07-08", "route_name": "437oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 12, "date": "2025-07-08", "route_name": "438oS", "details": {"duration_hours": 8, "type": "regular"}},
     
-    # Wednesday 2025-07-09 (6 routes)
-    {"date": "2025-07-09", "route_name": "421MI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-09", "route_name": "422MI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-09", "route_name": "423MI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-09", "route_name": "424MI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-09", "route_name": "425MI", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-09", "route_name": "426MI", "details": {"duration_hours": 8, "type": "regular"}},
+    # Wednesday 2025-07-09 (6 routes) - route_id 13-18
+    {"route_id": 13, "date": "2025-07-09", "route_name": "431oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 14, "date": "2025-07-09", "route_name": "432oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 15, "date": "2025-07-09", "route_name": "433oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 16, "date": "2025-07-09", "route_name": "434oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 17, "date": "2025-07-09", "route_name": "437oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 18, "date": "2025-07-09", "route_name": "438oS", "details": {"duration_hours": 8, "type": "regular"}},
     
-    # Thursday 2025-07-10 (6 routes)
-    {"date": "2025-07-10", "route_name": "431DO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-10", "route_name": "432DO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-10", "route_name": "433DO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-10", "route_name": "434DO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-10", "route_name": "435DO", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-10", "route_name": "436DO", "details": {"duration_hours": 8, "type": "regular"}},
+    # Thursday 2025-07-10 (6 routes) - route_id 19-24
+    {"route_id": 19, "date": "2025-07-10", "route_name": "431oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 20, "date": "2025-07-10", "route_name": "432oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 21, "date": "2025-07-10", "route_name": "433oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 22, "date": "2025-07-10", "route_name": "434oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 23, "date": "2025-07-10", "route_name": "437oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 24, "date": "2025-07-10", "route_name": "438oS", "details": {"duration_hours": 8, "type": "regular"}},
     
-    # Friday 2025-07-11 (6 routes)
-    {"date": "2025-07-11", "route_name": "441FR", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-11", "route_name": "442FR", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-11", "route_name": "443FR", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-11", "route_name": "444FR", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-11", "route_name": "445FR", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-11", "route_name": "446FR", "details": {"duration_hours": 8, "type": "regular"}},
+    # Friday 2025-07-11 (6 routes) - route_id 25-30
+    {"route_id": 25, "date": "2025-07-11", "route_name": "431oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 26, "date": "2025-07-11", "route_name": "432oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 27, "date": "2025-07-11", "route_name": "433oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 28, "date": "2025-07-11", "route_name": "434oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 29, "date": "2025-07-11", "route_name": "437oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 30, "date": "2025-07-11", "route_name": "438oS", "details": {"duration_hours": 8, "type": "regular"}},
     
-    # Saturday 2025-07-12 (12 routes)
-    {"date": "2025-07-12", "route_name": "451SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "452SA", "details": {"duration_hours": 8, "type": "special", "assigned_driver": "Klagenfurt - Samstagsfahrer"}},
-    {"date": "2025-07-12", "route_name": "453SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "454SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "455SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "456SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "457SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "458SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "459SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "460SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "461SA", "details": {"duration_hours": 8, "type": "regular"}},
-    {"date": "2025-07-12", "route_name": "462SA", "details": {"duration_hours": 8, "type": "regular"}}
+    # Saturday 2025-07-12 (12 routes) - route_id 31-42
+    {"route_id": 31, "date": "2025-07-12", "route_name": "431oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 32, "date": "2025-07-12", "route_name": "432oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 33, "date": "2025-07-12", "route_name": "433oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 34, "date": "2025-07-12", "route_name": "434oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 35, "date": "2025-07-12", "route_name": "437oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 36, "date": "2025-07-12", "route_name": "438oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 37, "date": "2025-07-12", "route_name": "439oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 38, "date": "2025-07-12", "route_name": "440oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 39, "date": "2025-07-12", "route_name": "441oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 40, "date": "2025-07-12", "route_name": "442oS", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 41, "date": "2025-07-12", "route_name": "451SA", "details": {"duration_hours": 8, "type": "regular"}},
+    {"route_id": 42, "date": "2025-07-12", "route_name": "452SA", "details": {"duration_hours": 8, "type": "special", "assigned_driver": "Klagenfurt - Samstagsfahrer"}}
 ]
 
 class RouteBackupManager:
@@ -155,18 +157,14 @@ class RouteBackupManager:
             logger.error(f"Failed to backup routes: {e}")
             return []
     
-    async def restore_original_routes(self) -> bool:
-        """Restore original system routes from backup"""
+    async def restore_original_routes(self) -> int:
+        """Restore exactly 42 original system routes"""
         try:
             async with self.db_manager.get_connection() as conn:
-                # First, clear existing routes for the week
-                await conn.execute("""
-                    DELETE FROM routes 
-                    WHERE date BETWEEN '2025-07-07' AND '2025-07-13'
-                """)
-                logger.info("Cleared existing routes for July 7-13, 2025")
+                # Don't clear routes here - this is called after reset already cleared them
                 
-                # Restore original routes
+                # Restore original routes without specifying route_id (auto-increment)
+                restored_count = 0
                 for route_data in ORIGINAL_ROUTES_BACKUP:
                     await conn.execute("""
                         INSERT INTO routes (date, route_name, details, created_at)
@@ -177,22 +175,25 @@ class RouteBackupManager:
                     json.dumps(route_data['details']),
                     datetime(2025, 8, 11, 21, 10, 0)  # Original system timestamp
                     )
+                    restored_count += 1
                 
-                logger.info(f"Restored {len(ORIGINAL_ROUTES_BACKUP)} original routes")
-                return True
+                logger.info(f"Restored {restored_count} original routes")
+                return restored_count
                 
         except Exception as e:
             logger.error(f"Failed to restore original routes: {e}")
-            return False
+            return 0
     
     async def check_missing_routes(self) -> List[str]:
-        """Check which original routes are missing from the system"""
+        """Check which original routes (route_id 1-42) are missing from the system"""
         try:
             async with self.db_manager.get_connection() as conn:
+                # Check only routes with route_id 1-42 (original system routes)
                 existing_routes = await conn.fetch("""
-                    SELECT route_name, date 
+                    SELECT route_name, date, route_id
                     FROM routes 
                     WHERE date BETWEEN '2025-07-07' AND '2025-07-13'
+                    AND route_id BETWEEN 1 AND 42
                 """)
                 
                 existing_set = {(route['route_name'], route['date'].strftime('%Y-%m-%d')) 
@@ -204,10 +205,13 @@ class RouteBackupManager:
                 missing_routes = original_set - existing_set
                 missing_list = [f"{route_name} on {date}" for route_name, date in missing_routes]
                 
+                # Log current state
+                logger.info(f"Current system has {len(existing_routes)} original routes (route_id 1-42)")
+                
                 if missing_routes:
                     logger.warning(f"Missing {len(missing_routes)} original routes: {missing_list}")
                 else:
-                    logger.info("All original routes are present")
+                    logger.info("All 42 original routes are present")
                 
                 return missing_list
                 
@@ -216,7 +220,7 @@ class RouteBackupManager:
             return []
     
     async def restore_missing_routes(self) -> int:
-        """Restore only the missing original routes"""
+        """Restore only the missing original routes without conflicting route_ids"""
         try:
             missing_routes = await self.check_missing_routes()
             if not missing_routes:
@@ -228,6 +232,7 @@ class RouteBackupManager:
                 for route_data in ORIGINAL_ROUTES_BACKUP:
                     route_key = f"{route_data['route_name']} on {route_data['date']}"
                     if route_key in missing_routes:
+                        # Insert without specifying route_id to avoid conflicts
                         await conn.execute("""
                             INSERT INTO routes (date, route_name, details, created_at)
                             VALUES ($1, $2, $3, $4)
