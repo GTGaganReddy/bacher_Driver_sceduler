@@ -1,0 +1,26 @@
+{
+  "name": "driver-scheduling-api-cloudflare",
+  "version": "1.0.0",
+  "description": "Driver Scheduling API deployment for Cloudflare Workers",
+  "main": "worker.py",
+  "scripts": {
+    "deploy": "wrangler deploy --env production",
+    "deploy:staging": "wrangler deploy --env staging",
+    "dev": "wrangler dev",
+    "tail": "wrangler tail --env production",
+    "secret:set": "./deploy.sh"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  },
+  "keywords": [
+    "fastapi",
+    "cloudflare-workers",
+    "driver-scheduling",
+    "optimization",
+    "supabase"
+  ],
+  "author": "Driver Scheduling System",
+  "license": "MIT"
+}
