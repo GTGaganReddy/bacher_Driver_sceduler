@@ -15,11 +15,11 @@ Preferred communication style: Simple, everyday language.
 - **✅ Missing route detection**: Automatically identifies which original routes are missing from system
 - **✅ Smart route recovery**: Only restores missing routes while preserving existing data
 - **✅ New API endpoint**: `/api/v1/assistant/recover-routes` for manual route recovery operations
-- **✅ CRITICAL ISSUE RESOLVED**: Fixed assignments are PRESERVED during reset (never deleted)
+- **✅ CRITICAL CHANGE**: Fixed assignments are now RESET to default state during reset (as requested)
 - **✅ Route deletion protection**: System can now recover accidentally deleted original routes
 - **✅ Reset enhancements**: Reset function provides detailed feedback on recovery operations
 - **✅ Backup system tested**: Successfully restored 40 missing routes in test scenario
-- **Fixed assignments safety**: Reset only clears optimized assignments, preserves all fixed route assignments
+- **Fixed assignments reset**: Reset now clears all fixed assignments and restores the 36 default assignments
 - **Original route preservation**: 42 core routes for July 7-13, 2025 protected from permanent deletion
 - **Recovery statistics**: Reset function reports missing_routes_found and routes_restored counts
 

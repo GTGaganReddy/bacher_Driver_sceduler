@@ -10,6 +10,61 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Default fixed assignments for the system (36 assignments)
+DEFAULT_FIXED_ASSIGNMENTS = [
+    # Hinteregger, Manfred (driver_id: 4) -> 431oS Monday to Friday
+    {"driver_id": 4, "route_id": 1, "date": "2025-07-07"},   # Monday 431oS
+    {"driver_id": 4, "route_id": 9, "date": "2025-07-08"},   # Tuesday 431oS
+    {"driver_id": 4, "route_id": 17, "date": "2025-07-09"},  # Wednesday 431oS
+    {"driver_id": 4, "route_id": 25, "date": "2025-07-10"},  # Thursday 431oS
+    {"driver_id": 4, "route_id": 33, "date": "2025-07-11"},  # Friday 431oS
+    
+    # Kandolf, Alfred (driver_id: 5) -> 434oS Monday to Friday
+    {"driver_id": 5, "route_id": 4, "date": "2025-07-07"},   # Monday 434oS
+    {"driver_id": 5, "route_id": 12, "date": "2025-07-08"},  # Tuesday 434oS
+    {"driver_id": 5, "route_id": 20, "date": "2025-07-09"},  # Wednesday 434oS
+    {"driver_id": 5, "route_id": 28, "date": "2025-07-10"},  # Thursday 434oS
+    {"driver_id": 5, "route_id": 36, "date": "2025-07-11"},  # Friday 434oS
+    
+    # Madrutter, Anton (driver_id: 8) -> 439oS Monday to Friday
+    {"driver_id": 8, "route_id": 7, "date": "2025-07-07"},   # Monday 439oS
+    {"driver_id": 8, "route_id": 15, "date": "2025-07-08"},  # Tuesday 439oS
+    {"driver_id": 8, "route_id": 23, "date": "2025-07-09"},  # Wednesday 439oS
+    {"driver_id": 8, "route_id": 31, "date": "2025-07-10"},  # Thursday 439oS
+    {"driver_id": 8, "route_id": 39, "date": "2025-07-11"},  # Friday 439oS
+    
+    # Niederbichler, Daniel (driver_id: 9) -> 433oS Monday to Friday
+    {"driver_id": 9, "route_id": 3, "date": "2025-07-07"},   # Monday 433oS
+    {"driver_id": 9, "route_id": 11, "date": "2025-07-08"},  # Tuesday 433oS
+    {"driver_id": 9, "route_id": 19, "date": "2025-07-09"},  # Wednesday 433oS
+    {"driver_id": 9, "route_id": 27, "date": "2025-07-10"},  # Thursday 433oS
+    {"driver_id": 9, "route_id": 35, "date": "2025-07-11"},  # Friday 433oS
+    
+    # Rauter, Agnes Zita (driver_id: 12) -> 432oS Monday to Friday
+    {"driver_id": 12, "route_id": 2, "date": "2025-07-07"},  # Monday 432oS
+    {"driver_id": 12, "route_id": 10, "date": "2025-07-08"}, # Tuesday 432oS
+    {"driver_id": 12, "route_id": 18, "date": "2025-07-09"}, # Wednesday 432oS
+    {"driver_id": 12, "route_id": 26, "date": "2025-07-10"}, # Thursday 432oS
+    {"driver_id": 12, "route_id": 34, "date": "2025-07-11"}, # Friday 432oS
+    
+    # Simon, Otto (driver_id: 13) -> 437oS Monday to Friday
+    {"driver_id": 13, "route_id": 5, "date": "2025-07-07"},  # Monday 437oS
+    {"driver_id": 13, "route_id": 13, "date": "2025-07-08"}, # Tuesday 437oS
+    {"driver_id": 13, "route_id": 21, "date": "2025-07-09"}, # Wednesday 437oS
+    {"driver_id": 13, "route_id": 29, "date": "2025-07-10"}, # Thursday 437oS
+    {"driver_id": 13, "route_id": 37, "date": "2025-07-11"}, # Friday 437oS
+    
+    # Struckl, Stefan (driver_id: 15) -> 438oS Monday to Friday
+    {"driver_id": 15, "route_id": 6, "date": "2025-07-07"},  # Monday 438oS
+    {"driver_id": 15, "route_id": 14, "date": "2025-07-08"}, # Tuesday 438oS
+    {"driver_id": 15, "route_id": 22, "date": "2025-07-09"}, # Wednesday 438oS
+    {"driver_id": 15, "route_id": 30, "date": "2025-07-10"}, # Thursday 438oS
+    {"driver_id": 15, "route_id": 38, "date": "2025-07-11"}, # Friday 438oS
+    
+    # Klagenfurt - Fahrer (driver_id: 20) -> 451SA Saturday
+    {"driver_id": 20, "route_id": 41, "date": "2025-07-12"}  # Saturday 451SA
+]
+
 # Original system routes for July 7-13, 2025 (42 routes)
 ORIGINAL_ROUTES_BACKUP = [
     # Monday 2025-07-07 (6 routes)
@@ -189,4 +244,32 @@ class RouteBackupManager:
             
         except Exception as e:
             logger.error(f"Failed to restore missing routes: {e}")
+            return 0
+    
+    async def restore_default_fixed_assignments(self) -> int:
+        """Clear all fixed assignments and restore default ones"""
+        try:
+            async with self.db_manager.get_connection() as conn:
+                # Clear all existing fixed assignments
+                await conn.execute("DELETE FROM fixed_assignments")
+                logger.info("Cleared all existing fixed assignments")
+                
+                # Restore default fixed assignments
+                restored_count = 0
+                for assignment in DEFAULT_FIXED_ASSIGNMENTS:
+                    await conn.execute("""
+                        INSERT INTO fixed_assignments (driver_id, route_id, date)
+                        VALUES ($1, $2, $3)
+                    """, 
+                    assignment['driver_id'],
+                    assignment['route_id'],
+                    datetime.strptime(assignment['date'], '%Y-%m-%d').date()
+                    )
+                    restored_count += 1
+                
+                logger.info(f"Restored {restored_count} default fixed assignments")
+                return restored_count
+                
+        except Exception as e:
+            logger.error(f"Failed to restore default fixed assignments: {e}")
             return 0

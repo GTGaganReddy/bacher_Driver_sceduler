@@ -448,13 +448,18 @@ async def reset_system():
         
         # Check for missing original routes and restore them
         missing_routes = await backup_manager.check_missing_routes()
-        restored_count = 0
+        restored_routes_count = 0
         if missing_routes:
             logger.warning(f"Found {len(missing_routes)} missing original routes - restoring them")
-            restored_count = await backup_manager.restore_missing_routes()
-            logger.info(f"Restored {restored_count} missing original routes")
+            restored_routes_count = await backup_manager.restore_missing_routes()
+            logger.info(f"Restored {restored_routes_count} missing original routes")
         else:
             logger.info("All original routes are present - no restoration needed")
+        
+        # Reset fixed assignments to default state
+        logger.info("Resetting fixed assignments to default state")
+        restored_fixed_count = await backup_manager.restore_default_fixed_assignments()
+        logger.info(f"Restored {restored_fixed_count} default fixed assignments")
         
         # Get fresh data for verification
         drivers = await db_service.get_drivers()
@@ -511,14 +516,16 @@ async def reset_system():
         
         return {
             "status": "success",
-            "message": "System reset to initial state with route recovery and optimization completed",
+            "message": "System reset to initial state with route recovery, fixed assignments reset, and optimization completed",
             "drivers_count": len(drivers),
             "routes_count": len(routes),
             "assignments_cleared": True,
             "availability_reset": True,
             "routes_reset": True,
             "missing_routes_found": len(missing_routes),
-            "routes_restored": restored_count,
+            "routes_restored": restored_routes_count,
+            "fixed_assignments_reset": True,
+            "fixed_assignments_restored": restored_fixed_count,
             "optimization_run": True,
             "sheets_updated": sheets_updated,
             "assignments": assignments,  # Full assignment details by date
