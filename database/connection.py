@@ -88,6 +88,19 @@ class DatabaseManager:
                 );
             """)
             
+            # Create fixed assignments table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS fixed_assignments (
+                    id SERIAL PRIMARY KEY,
+                    driver_id INTEGER NOT NULL,
+                    route_id INTEGER NOT NULL,
+                    date DATE NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(driver_id, route_id, date)
+                );
+            """)
+            
             logger.info("All tables created successfully")
     
     async def insert_july_2025_data(self):

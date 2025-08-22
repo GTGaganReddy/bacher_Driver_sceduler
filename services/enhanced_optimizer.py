@@ -628,7 +628,7 @@ class EnhancedDriverRouteOptimizer:
         return daily_reports
 
 
-def run_enhanced_ortools_optimization(drivers: List[Dict], routes: List[Dict], availability: List[Dict]) -> Dict:
+def run_enhanced_ortools_optimization(drivers: List[Dict], routes: List[Dict], availability: List[Dict], fixed_assignments_data: List[Dict] = None) -> Dict:
     """
     Enhanced OR-Tools optimization with consecutive hours constraint and system output format compatibility
     Returns format compatible with existing Google Sheets service
@@ -639,7 +639,7 @@ def run_enhanced_ortools_optimization(drivers: List[Dict], routes: List[Dict], a
         
         # Load data
         optimizer.load_drivers(drivers)
-        optimizer.load_routes(routes)
+        optimizer.load_routes(routes, fixed_assignments_data or [])
         optimizer.load_availability(availability)
         
         # Run optimization

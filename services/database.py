@@ -73,6 +73,19 @@ class DatabaseService:
                 ORDER BY da.date, d.name
             """, start_date, end_date)
             return [dict(row) for row in rows]
+
+    async def get_fixed_assignments_by_date_range(self, start_date: date, end_date: date) -> List[Dict]:
+        """Get fixed assignments within date range"""
+        async with self.db_manager.get_connection() as conn:
+            rows = await conn.fetch("""
+                SELECT fa.*, d.name as driver_name, r.route_name
+                FROM fixed_assignments fa
+                JOIN drivers d ON fa.driver_id = d.driver_id
+                JOIN routes r ON fa.route_id = r.route_id
+                WHERE fa.date BETWEEN $1 AND $2
+                ORDER BY fa.date, fa.driver_id
+            """, start_date, end_date)
+            return [dict(row) for row in rows]
     
     async def update_driver_availability(self, driver_id: int, availability_date: date, available: bool):
         """Update driver availability"""

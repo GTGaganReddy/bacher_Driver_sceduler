@@ -8,17 +8,20 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
-## August 22, 2025 - Enhanced OR-Tools Optimizer Integration Complete
+## August 22, 2025 - Enhanced OR-Tools Optimizer Integration Complete with Fixed Assignments
 - **MAJOR UPGRADE**: Successfully integrated enhanced OR-Tools optimizer with consecutive hours constraints
+- **Fixed assignments database table**: Created `fixed_assignments` table with 36 predefined driver-route assignments
+- **Database integration**: All API endpoints now fetch and use fixed assignments for optimization
 - **Day-by-day optimization**: True sequential processing that optimizes each date chronologically (July 7→8→9→10→11→12)
 - **Advanced constraint handling**: 48-hour weekly limits, 36-hour consecutive working constraints, capacity tracking
 - **Fixed date format issues**: Resolved datetime/string inconsistencies between database and optimizer
 - **Complete workflow verification**: Reset function → Enhanced optimization → Google Sheets sync all working perfectly
 - **Performance improvement**: More realistic scheduling with dynamic hour consumption between days
 - **Special constraints preserved**: Saturday route "452SA" still correctly assigned to "Klagenfurt - Samstagsfahrer"
-- **All API endpoints updated**: Six OpenAI Assistant endpoints now use enhanced optimizer
+- **All API endpoints updated**: Six OpenAI Assistant endpoints now use enhanced optimizer with fixed assignments
 - **Production ready**: 42 routes optimized successfully, Google Sheets showing "42 assigned, 0 F entries, 105 blank"
 - **Dynamic route handling**: Add/remove routes with automatic reoptimization using enhanced algorithm
+- **Fixed assignments working**: Predefined assignments for 7 drivers across weekdays and 1 driver for Saturday routes
 
 ## August 13, 2025 - Complete Technical Documentation with Future Roadmap
 - **COMPREHENSIVE DOCUMENTATION**: Created detailed technical documentation for BubbleGPT Assistant workflow

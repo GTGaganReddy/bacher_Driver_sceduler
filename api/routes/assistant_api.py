@@ -76,8 +76,11 @@ async def optimize_week(request: WeeklyOptimizationRequest):
         if not drivers or not routes:
             raise HTTPException(status_code=404, detail="Missing drivers or routes data")
         
+        # Get fixed assignments from database
+        fixed_assignments = await db_service.get_fixed_assignments_by_date_range(week_start, week_end)
+        
         # Run ENHANCED OR-Tools optimization with consecutive hours constraint
-        optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability)
+        optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability, fixed_assignments)
         
         # Generate complete driver grid for Google Sheets
         week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
@@ -152,8 +155,9 @@ async def update_availability(request: AvailabilityUpdateRequest):
         # Rerun complete optimization
         routes = await db_service.get_routes_by_date_range(week_start, week_end)
         availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        fixed_assignments = await db_service.get_fixed_assignments_by_date_range(week_start, week_end)
         
-        optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability)
+        optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability, fixed_assignments)
         
         # Update Google Sheets
         week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
@@ -230,8 +234,9 @@ async def add_route(request: RouteRequest):
         drivers = await db_service.get_drivers()
         routes = await db_service.get_routes_by_date_range(week_start, week_end)
         availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        fixed_assignments = await db_service.get_fixed_assignments_by_date_range(week_start, week_end)
         
-        optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability)
+        optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability, fixed_assignments)
         
         # Update Google Sheets
         week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
@@ -321,8 +326,9 @@ async def remove_route(request: RemoveRouteRequest):
         drivers = await db_service.get_drivers()
         routes = await db_service.get_routes_by_date_range(week_start, week_end)
         availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        fixed_assignments = await db_service.get_fixed_assignments_by_date_range(week_start, week_end)
         
-        optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability)
+        optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability, fixed_assignments)
         
         # Update Google Sheets
         week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
@@ -411,8 +417,14 @@ async def reset_system():
         )
         
         if routes:
+            # Get fixed assignments from database
+            fixed_assignments = await db_service.get_fixed_assignments_by_date_range(
+                datetime.strptime('2025-07-07', '%Y-%m-%d').date(),
+                datetime.strptime('2025-07-13', '%Y-%m-%d').date()
+            )
+            
             # Run ENHANCED optimization with consecutive hours constraint
-            optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability)
+            optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability, fixed_assignments)
             
             # Update Google Sheets with reset state
             week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
