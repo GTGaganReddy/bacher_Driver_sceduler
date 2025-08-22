@@ -420,12 +420,14 @@ async def reset_system():
             await conn.execute("DELETE FROM assignments")
             logger.info("Cleared all assignments")
             
-            # Clear ALL routes for the week and let route recovery restore only the original 42
+            # Clear routes that were added via API (created after initial system setup)
+            # Only remove routes added after August 11, 2025 to preserve original system data
             await conn.execute("""
                 DELETE FROM routes 
-                WHERE date BETWEEN '2025-07-07' AND '2025-07-13'
+                WHERE date BETWEEN '2025-07-07' AND '2025-07-13' 
+                AND created_at > '2025-08-11 21:10:00'
             """)
-            logger.info("Cleared all routes for July 7-13, 2025 - will restore original 42 routes")
+            logger.info("Cleared manually added routes (preserving original system routes)")
             
             # Reset all driver availability to true (available) for July 7-13, 2025
             # Keep Sunday (2025-07-13) as unavailable for all drivers
@@ -444,10 +446,15 @@ async def reset_system():
             
             logger.info("Reset driver availability - weekdays available, Sunday unavailable")
         
-        # Always restore the 42 original routes after clearing all routes
-        logger.info("Restoring 42 original routes after full clear")
-        restored_routes_count = await backup_manager.restore_original_routes()
-        logger.info(f"Restored {restored_routes_count} original routes")
+        # Check for missing original routes and restore them
+        missing_routes = await backup_manager.check_missing_routes()
+        restored_routes_count = 0
+        if missing_routes:
+            logger.warning(f"Found {len(missing_routes)} missing original routes - restoring them")
+            restored_routes_count = await backup_manager.restore_missing_routes()
+            logger.info(f"Restored {restored_routes_count} missing original routes")
+        else:
+            logger.info("All original routes are present - no restoration needed")
         
         # Reset fixed assignments to default state
         logger.info("Resetting fixed assignments to default state")
@@ -515,7 +522,7 @@ async def reset_system():
             "assignments_cleared": True,
             "availability_reset": True,
             "routes_reset": True,
-            "missing_routes_found": 0,  # Always clear and restore all routes
+            "missing_routes_found": len(missing_routes),
             "routes_restored": restored_routes_count,
             "fixed_assignments_reset": True,
             "fixed_assignments_restored": restored_fixed_count,
