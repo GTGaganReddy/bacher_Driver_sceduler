@@ -1,0 +1,16 @@
+name = "driver-scheduling-api"
+main = "main.py"
+compatibility_date = "2024-08-01"
+
+# Production environment with your custom domain
+[env.production]
+name = "driver-scheduling-api"
+vars = { DEBUG = "false", LOG_LEVEL = "INFO", PORT = "8000" }
+
+# Environment variables (set via Cloudflare Dashboard or CLI)
+# Required secrets:
+# - DATABASE_URL
+# - SUPABASE_PASSWORD
+# - SUPABASE_URL
+# - SUPABASE_KEY
+# - GCF_URL
