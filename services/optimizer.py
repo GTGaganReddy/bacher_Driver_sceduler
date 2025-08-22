@@ -44,7 +44,7 @@ def parse_json_details(details_str: str) -> Dict:
     except (json.JSONDecodeError, TypeError):
         return {}
 
-def run_ortools_optimization(drivers: List[Dict], routes: List[Dict], availability: List[Dict]) -> Dict:
+def run_enhanced_ortools_optimization(drivers: List[Dict], routes: List[Dict], availability: List[Dict]) -> Dict:
     """
     Run OR-Tools optimization for driver-route assignment with sequential hour reduction
     

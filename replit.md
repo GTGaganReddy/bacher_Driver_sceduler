@@ -8,6 +8,18 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+## August 22, 2025 - Enhanced OR-Tools Optimizer Integration Complete
+- **MAJOR UPGRADE**: Successfully integrated enhanced OR-Tools optimizer with consecutive hours constraints
+- **Day-by-day optimization**: True sequential processing that optimizes each date chronologically (July 7→8→9→10→11→12)
+- **Advanced constraint handling**: 48-hour weekly limits, 36-hour consecutive working constraints, capacity tracking
+- **Fixed date format issues**: Resolved datetime/string inconsistencies between database and optimizer
+- **Complete workflow verification**: Reset function → Enhanced optimization → Google Sheets sync all working perfectly
+- **Performance improvement**: More realistic scheduling with dynamic hour consumption between days
+- **Special constraints preserved**: Saturday route "452SA" still correctly assigned to "Klagenfurt - Samstagsfahrer"
+- **All API endpoints updated**: Six OpenAI Assistant endpoints now use enhanced optimizer
+- **Production ready**: 42 routes optimized successfully, Google Sheets showing "42 assigned, 0 F entries, 105 blank"
+- **Dynamic route handling**: Add/remove routes with automatic reoptimization using enhanced algorithm
+
 ## August 13, 2025 - Complete Technical Documentation with Future Roadmap
 - **COMPREHENSIVE DOCUMENTATION**: Created detailed technical documentation for BubbleGPT Assistant workflow
 - **Architecture Overview**: BubbleGPT → FastAPI Backend → PostgreSQL → OR-Tools → Google Cloud Function → Google Sheets

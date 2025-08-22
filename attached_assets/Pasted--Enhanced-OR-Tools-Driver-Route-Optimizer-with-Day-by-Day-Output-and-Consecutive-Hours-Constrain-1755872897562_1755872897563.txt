@@ -1,0 +1,1014 @@
+"""
+Enhanced OR-Tools Driver Route Optimizer with Day-by-Day Output and Consecutive Hours Constraint
+Provides detailed daily reports and progress tracking with 36-hour consecutive work limit
+"""
+
+import json
+import logging
+from datetime import datetime, timedelta
+from typing import Dict, List, Any, Tuple, Optional
+from dataclasses import dataclass, asdict
+from copy import deepcopy
+from ortools.linear_solver import pywraplp
+
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class Driver:
+    """Driver data structure"""
+    driver_id: str
+    name: str
+    monthly_hours: float
+    remaining_hours: float
+    driver_type: str
+    
+    def to_dict(self) -> Dict:
+        return asdict(self)
+
+
+@dataclass
+class Route:
+    """Route data structure"""
+    route_id: str
+    route_name: str
+    date: str
+    day_of_week: str
+    duration_hours: float
+    route_code: str
+    route_type: str
+    fixed_driver_id: Optional[str] = None
+    
+    def to_dict(self) -> Dict:
+        return asdict(self)
+
+
+@dataclass
+class Availability:
+    """Driver availability data structure"""
+    driver_id: str
+    date: str
+    available: bool
+    shift_preference: str = "any"
+
+
+@dataclass
+class Assignment:
+    """Assignment result structure"""
+    driver_name: str
+    driver_id: str
+    route_id: str
+    route_name: str
+    duration_hours: float
+    duration_formatted: str
+    status: str  # "fixed_assignment", "optimized_assignment", "unavailable"
+    
+    def to_dict(self) -> Dict:
+        return asdict(self)
+
+
+@dataclass
+class DailyReport:
+    """Daily optimization report"""
+    date: str
+    day_of_week: str
+    total_routes: int
+    assigned_routes: int
+    unassigned_routes: int
+    fixed_assignments: int
+    optimized_assignments: int
+    assignment_rate: float
+    assignments: List[Assignment]
+    unassigned_route_names: List[str]
+    driver_hours_used: Dict[str, float]
+    solver_status: str
+    optimization_time_seconds: float
+    
+    def to_dict(self) -> Dict:
+        result = asdict(self)
+        result['assignments'] = [assignment.to_dict() for assignment in self.assignments]
+        return result
+
+
+class EnhancedDriverRouteOptimizer:
+    """Enhanced optimizer class with day-by-day reporting and consecutive hours constraint"""
+    
+    def __init__(self, max_weekly_hours: float = 48.0, max_consecutive_hours: float = 36.0):
+        self.drivers: Dict[str, Driver] = {}
+        self.routes_by_date: Dict[str, List[Route]] = {}
+        self.availability: Dict[Tuple[str, str], Availability] = {}
+        self.daily_reports: Dict[str, DailyReport] = {}
+        self.overall_statistics = {}
+        self.max_weekly_hours = max_weekly_hours
+        self.max_consecutive_hours = max_consecutive_hours
+        self.driver_weekly_hours: Dict[str, Dict[str, float]] = {}  # driver_id -> {week_start: hours}
+        self.driver_assignments_by_date: Dict[str, Dict[str, float]] = {}  # driver_id -> {date: hours}
+        
+    def parse_time_string(self, time_str: str) -> float:
+        """Convert time string to decimal hours"""
+        try:
+            if not time_str or not isinstance(time_str, str):
+                logger.warning(f"Invalid time string: {time_str}, using default 8.0 hours")
+                return 8.0
+                
+            time_str = time_str.strip()
+            if ':' not in time_str:
+                logger.warning(f"Invalid time format: {time_str}, using default 8.0 hours")
+                return 8.0
+                
+            parts = time_str.split(':')
+            if len(parts) != 2:
+                logger.warning(f"Invalid time format: {time_str}, using default 8.0 hours")
+                return 8.0
+                
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            
+            return hours + (minutes / 60.0)
+            
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"Error parsing time string '{time_str}': {e}, using default 8.0 hours")
+            return 8.0
+    
+    def parse_json_details(self, details_str: str) -> Dict:
+        """Parse JSON string from database details field"""
+        try:
+            if not details_str:
+                return {}
+            return json.loads(details_str)
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning(f"Error parsing JSON details '{details_str}': {e}")
+            return {}
+    
+    def format_hours(self, hours: float) -> str:
+        """Convert decimal hours back to HH:MM format"""
+        total_minutes = int(hours * 60)
+        h = total_minutes // 60
+        m = total_minutes % 60
+        return f"{h}:{m:02d}"
+    
+    def get_week_start(self, date_str: str) -> str:
+        """Get the Monday of the week for a given date"""
+        try:
+            date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+            # Get Monday of this week (weekday 0 = Monday)
+            days_since_monday = date_obj.weekday()
+            monday = date_obj - timedelta(days=days_since_monday)
+            return monday.strftime('%Y-%m-%d')
+        except ValueError:
+            logger.warning(f"Invalid date format: {date_str}")
+            return date_str
+    
+    def get_date_range(self, start_date: str, days: int) -> List[str]:
+        """Get a range of dates starting from start_date"""
+        try:
+            start_obj = datetime.strptime(start_date, '%Y-%m-%d')
+            dates = []
+            for i in range(days):
+                date_obj = start_obj + timedelta(days=i)
+                dates.append(date_obj.strftime('%Y-%m-%d'))
+            return dates
+        except ValueError:
+            logger.warning(f"Invalid date format: {start_date}")
+            return []
+    
+    def get_previous_date(self, date_str: str) -> str:
+        """Get the previous date"""
+        try:
+            date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+            prev_date = date_obj - timedelta(days=1)
+            return prev_date.strftime('%Y-%m-%d')
+        except ValueError:
+            logger.warning(f"Invalid date format: {date_str}")
+            return date_str
+    
+    def get_driver_weekly_hours(self, driver_id: str, date: str) -> float:
+        """Get current weekly hours for a driver up to the given date"""
+        week_start = self.get_week_start(date)
+        
+        if driver_id not in self.driver_weekly_hours:
+            self.driver_weekly_hours[driver_id] = {}
+        
+        return self.driver_weekly_hours[driver_id].get(week_start, 0.0)
+    
+    def add_driver_weekly_hours(self, driver_id: str, date: str, hours: float):
+        """Add hours to a driver's weekly total"""
+        week_start = self.get_week_start(date)
+        
+        if driver_id not in self.driver_weekly_hours:
+            self.driver_weekly_hours[driver_id] = {}
+        
+        if week_start not in self.driver_weekly_hours[driver_id]:
+            self.driver_weekly_hours[driver_id][week_start] = 0.0
+        
+        self.driver_weekly_hours[driver_id][week_start] += hours
+    
+    def add_driver_daily_hours(self, driver_id: str, date: str, hours: float):
+        """Track daily hours for consecutive hours constraint"""
+        if driver_id not in self.driver_assignments_by_date:
+            self.driver_assignments_by_date[driver_id] = {}
+        
+        self.driver_assignments_by_date[driver_id][date] = hours
+    
+    def get_driver_consecutive_hours(self, driver_id: str, current_date: str, days_back: int = 4) -> float:
+        """
+        Calculate consecutive hours worked by a driver UP TO (but not including) current_date
+        Looking back 'days_back' days to check for consecutive work periods
+        This represents hours that would be consecutive if we assign work on current_date
+        """
+        if driver_id not in self.driver_assignments_by_date:
+            return 0.0
+        
+        driver_schedule = self.driver_assignments_by_date[driver_id]
+        consecutive_hours = 0.0
+        
+        # Check backwards from the day BEFORE current date
+        try:
+            current_date_obj = datetime.strptime(current_date, '%Y-%m-%d')
+            
+            # Look back starting from previous day
+            for i in range(1, days_back + 1):  # Start from 1 to exclude current date
+                check_date_obj = current_date_obj - timedelta(days=i)
+                check_date = check_date_obj.strftime('%Y-%m-%d')
+                
+                if check_date in driver_schedule:
+                    consecutive_hours += driver_schedule[check_date]
+                    logger.debug(f"Driver {driver_id}: Found {driver_schedule[check_date]:.1f}h on {check_date}, consecutive total: {consecutive_hours:.1f}h")
+                else:
+                    # If there's a day with no work, break the consecutive streak
+                    logger.debug(f"Driver {driver_id}: No work on {check_date}, breaking consecutive streak")
+                    break
+            
+            logger.debug(f"Driver {driver_id}: Total consecutive hours before {current_date}: {consecutive_hours:.1f}h")
+            return consecutive_hours
+            
+        except ValueError:
+            logger.warning(f"Invalid date format: {current_date}")
+            return 0.0
+    
+    def can_assign_hours(self, driver_id: str, date: str, hours: float) -> bool:
+        """Check if assigning hours would violate weekly limit"""
+        current_weekly_hours = self.get_driver_weekly_hours(driver_id, date)
+        return (current_weekly_hours + hours) <= self.max_weekly_hours
+    
+    def can_assign_consecutive_hours(self, driver_id: str, date: str, hours: float) -> bool:
+        """Check if assigning hours would violate consecutive hours limit"""
+        current_consecutive = self.get_driver_consecutive_hours(driver_id, date)
+        return (current_consecutive + hours) <= self.max_consecutive_hours
+    
+    def load_drivers(self, driver_data: List[Dict]):
+        """Load and parse driver data"""
+        logger.info("Loading driver data...")
+        
+        for data in driver_data:
+            try:
+                driver_id_raw = data.get('driver_id') or data.get('id', '')
+                driver_id = str(driver_id_raw)
+                name = data.get('name', '')
+                details = self.parse_json_details(data.get('details', '{}'))
+                
+                monthly_hours_str = details.get('monthly_hours', '160:00')
+                monthly_hours = self.parse_time_string(monthly_hours_str)
+                driver_type = details.get('type', 'full_time')
+                
+                driver = Driver(
+                    driver_id=driver_id,
+                    name=name,
+                    monthly_hours=monthly_hours,
+                    remaining_hours=monthly_hours,
+                    driver_type=driver_type
+                )
+                
+                self.drivers[driver_id] = driver
+                logger.debug(f"Loaded driver: {name} ({driver_id}) - {monthly_hours}h capacity")
+                
+            except Exception as e:
+                logger.error(f"Error loading driver data {data}: {e}")
+                continue
+                
+        logger.info(f"Loaded {len(self.drivers)} drivers")
+    
+    def load_routes(self, route_data: List[Dict], fixed_assignments_data: List[Dict] = None):
+        """Load and parse route data"""
+        logger.info("Loading route data...")
+        
+        # Create fixed assignments lookup
+        fixed_assignments_lookup = {}
+        if fixed_assignments_data:
+            logger.info(f"Processing {len(fixed_assignments_data)} fixed assignments...")
+            for assignment in fixed_assignments_data:
+                route_id = assignment.get('route_id')
+                date = assignment.get('date')
+                driver_id = str(assignment.get('driver_id'))
+                
+                if route_id and date and driver_id:
+                    key = (route_id, date)
+                    fixed_assignments_lookup[key] = driver_id
+        
+        for data in route_data:
+            try:
+                route_id = data.get('route_id') or data.get('id', '')
+                route_name = data.get('route_name', '')
+                date = data.get('date', '')
+                day_of_week = data.get('day_of_week', '').lower()
+                details = self.parse_json_details(data.get('details', '{}'))
+                
+                duration_str = details.get('duration', '8:00')
+                duration_hours = self.parse_time_string(duration_str)
+                route_code = details.get('route_code', '')
+                route_type = details.get('type', 'delivery')
+                
+                # Check for fixed assignment
+                fixed_driver_id = fixed_assignments_lookup.get((route_id, date))
+                if not fixed_driver_id:
+                    fixed_driver_id = details.get('fixed_driver_id')
+                
+                route = Route(
+                    route_id=route_id,
+                    route_name=route_name,
+                    date=date,
+                    day_of_week=day_of_week,
+                    duration_hours=duration_hours,
+                    route_code=route_code,
+                    route_type=route_type,
+                    fixed_driver_id=fixed_driver_id
+                )
+                
+                if date not in self.routes_by_date:
+                    self.routes_by_date[date] = []
+                self.routes_by_date[date].append(route)
+                
+            except Exception as e:
+                logger.error(f"Error loading route data {data}: {e}")
+                continue
+        
+        total_routes = sum(len(routes) for routes in self.routes_by_date.values())
+        fixed_count = sum(1 for routes in self.routes_by_date.values() 
+                         for route in routes if route.fixed_driver_id)
+        logger.info(f"Loaded {total_routes} routes across {len(self.routes_by_date)} dates")
+        logger.info(f"Found {fixed_count} routes with fixed assignments")
+    
+    def load_availability(self, availability_data: List[Dict]):
+        """Load driver availability data"""
+        logger.info("Loading availability data...")
+        
+        for data in availability_data:
+            try:
+                driver_id_raw = data.get('driver_id', '')
+                driver_id = str(driver_id_raw)
+                date = data.get('date', '')
+                available = data.get('available', True)
+                shift_preference = data.get('shift_preference', 'any')
+                
+                availability = Availability(
+                    driver_id=driver_id,
+                    date=date,
+                    available=available,
+                    shift_preference=shift_preference
+                )
+                
+                self.availability[(driver_id, date)] = availability
+                
+            except Exception as e:
+                logger.error(f"Error loading availability data {data}: {e}")
+                continue
+        
+        logger.info(f"Loaded availability data for {len(self.availability)} driver-date combinations")
+    
+    def is_driver_available(self, driver_id: str, date: str) -> bool:
+        """Check if driver is available on a specific date"""
+        availability = self.availability.get((driver_id, date))
+        if availability is None:
+            return True
+        return availability.available
+    
+    def optimize_single_day(self, date: str, routes: List[Route], 
+                           driver_remaining_hours: Dict[str, float]) -> DailyReport:
+        """
+        Optimize assignments for a single day and return detailed report
+        """
+        start_time = datetime.now()
+        
+        # Get day of week
+        try:
+            date_obj = datetime.strptime(date, '%Y-%m-%d')
+            day_of_week = date_obj.strftime('%A')
+        except ValueError:
+            day_of_week = "Unknown"
+        
+        logger.info(f"Optimizing {date} ({day_of_week}) with {len(routes)} routes")
+        
+        # Track hours used per driver for this day
+        daily_driver_hours = {driver_id: 0.0 for driver_id in self.drivers.keys()}
+        
+        # Apply fixed assignments
+        fixed_assignments = []
+        flexible_routes = []
+        
+        for route in routes:
+            if route.fixed_driver_id and self.validate_fixed_assignment(route, driver_remaining_hours):
+                driver = self.drivers[route.fixed_driver_id]
+                
+                assignment = Assignment(
+                    driver_name=driver.name,
+                    driver_id=route.fixed_driver_id,
+                    route_id=route.route_id,
+                    route_name=route.route_name,
+                    duration_hours=route.duration_hours,
+                    duration_formatted=self.format_hours(route.duration_hours),
+                    status="fixed_assignment"
+                )
+                
+                fixed_assignments.append(assignment)
+                driver_remaining_hours[route.fixed_driver_id] -= route.duration_hours
+                daily_driver_hours[route.fixed_driver_id] += route.duration_hours
+                
+                # Add to weekly hours tracking
+                self.add_driver_weekly_hours(route.fixed_driver_id, route.date, route.duration_hours)
+                # Add to daily hours tracking for consecutive constraint
+                self.add_driver_daily_hours(route.fixed_driver_id, route.date, route.duration_hours)
+                
+            elif route.fixed_driver_id:
+                logger.warning(f"Fixed assignment validation failed for route {route.route_name}")
+                route.fixed_driver_id = None
+                flexible_routes.append(route)
+            else:
+                flexible_routes.append(route)
+        
+        # Optimize flexible routes
+        optimized_assignments = []
+        solver_status = "No flexible routes"
+        
+        if flexible_routes:
+            solver = pywraplp.Solver.CreateSolver('SCIP')
+            if solver:
+                try:
+                    valid_pairs = self.get_valid_driver_route_pairs(
+                        self.drivers, flexible_routes, date, driver_remaining_hours
+                    )
+                    
+                    if valid_pairs:
+                        # Create variables
+                        x = {}
+                        for driver_id, route_id in valid_pairs:
+                            x[(driver_id, route_id)] = solver.IntVar(0, 1, f'x_{driver_id}_{route_id}')
+                        
+                        # Add constraints
+                        self.add_optimization_constraints(solver, x, valid_pairs, flexible_routes, 
+                                                        driver_remaining_hours, fixed_assignments, date)
+                        
+                        # Set objective
+                        self.set_optimization_objective(solver, x, valid_pairs, driver_remaining_hours)
+                        
+                        # Solve
+                        status = solver.Solve()
+                        solver_status = self.get_solver_status_string(status)
+                        
+                        if status == pywraplp.Solver.OPTIMAL or status == pywraplp.Solver.FEASIBLE:
+                            for driver_id, route_id in valid_pairs:
+                                if x[(driver_id, route_id)].solution_value() > 0.5:
+                                    driver = self.drivers[driver_id]
+                                    route = next(r for r in flexible_routes if r.route_id == route_id)
+                                    
+                                    assignment = Assignment(
+                                        driver_name=driver.name,
+                                        driver_id=driver_id,
+                                        route_id=route_id,
+                                        route_name=route.route_name,
+                                        duration_hours=route.duration_hours,
+                                        duration_formatted=self.format_hours(route.duration_hours),
+                                        status="optimized_assignment"
+                                    )
+                                    
+                                    optimized_assignments.append(assignment)
+                                    driver_remaining_hours[driver_id] -= route.duration_hours
+                                    daily_driver_hours[driver_id] += route.duration_hours
+                                    
+                                    # Add to weekly hours tracking
+                                    self.add_driver_weekly_hours(driver_id, date, route.duration_hours)
+                                    # Add to daily hours tracking for consecutive constraint
+                                    self.add_driver_daily_hours(driver_id, date, route.duration_hours)
+                    else:
+                        solver_status = "No valid driver-route pairs"
+                        
+                except Exception as e:
+                    logger.error(f"Optimization error for {date}: {e}")
+                    solver_status = f"Error: {str(e)}"
+                finally:
+                    del solver
+            else:
+                solver_status = "Solver creation failed"
+        
+        # Combine all assignments
+        all_assignments = fixed_assignments + optimized_assignments
+        
+        # Find unassigned routes
+        assigned_route_ids = {assignment.route_id for assignment in all_assignments}
+        unassigned_routes = [route for route in routes if route.route_id not in assigned_route_ids]
+        unassigned_route_names = [route.route_name for route in unassigned_routes]
+        
+        # Calculate metrics
+        total_routes = len(routes)
+        assigned_routes = len(all_assignments)
+        unassigned_routes_count = len(unassigned_routes)
+        assignment_rate = (assigned_routes / total_routes * 100) if total_routes > 0 else 0
+        
+        optimization_time = (datetime.now() - start_time).total_seconds()
+        
+        # Create daily report
+        daily_report = DailyReport(
+            date=date,
+            day_of_week=day_of_week,
+            total_routes=total_routes,
+            assigned_routes=assigned_routes,
+            unassigned_routes=unassigned_routes_count,
+            fixed_assignments=len(fixed_assignments),
+            optimized_assignments=len(optimized_assignments),
+            assignment_rate=assignment_rate,
+            assignments=all_assignments,
+            unassigned_route_names=unassigned_route_names,
+            driver_hours_used=daily_driver_hours,
+            solver_status=solver_status,
+            optimization_time_seconds=optimization_time
+        )
+        
+        logger.info(f"Day {date} completed: {assigned_routes}/{total_routes} routes assigned ({assignment_rate:.1f}%)")
+        
+        return daily_report
+    
+    def validate_fixed_assignment(self, route: Route, driver_remaining_hours: Dict[str, float]) -> bool:
+        """Validate that a fixed assignment is possible"""
+        if not route.fixed_driver_id:
+            return True
+            
+        driver_id = route.fixed_driver_id
+        
+        # Check driver exists
+        if driver_id not in self.drivers:
+            logger.warning(f"Fixed assignment failed: Driver {driver_id} not found for route {route.route_name}")
+            return False
+            
+        # Check driver availability
+        if not self.is_driver_available(driver_id, route.date):
+            logger.warning(f"Fixed assignment failed: Driver {driver_id} not available on {route.date} for route {route.route_name}")
+            return False
+            
+        # Check sufficient monthly hours
+        remaining = driver_remaining_hours.get(driver_id, 0)
+        if remaining < route.duration_hours:
+            logger.warning(f"Fixed assignment failed: Driver {driver_id} has insufficient monthly hours ({remaining:.1f} < {route.duration_hours:.1f}) for route {route.route_name}")
+            return False
+        
+        # Check weekly hour limit
+        if not self.can_assign_hours(driver_id, route.date, route.duration_hours):
+            current_weekly = self.get_driver_weekly_hours(driver_id, route.date)
+            logger.warning(f"Fixed assignment failed: Driver {driver_id} would exceed weekly limit ({current_weekly:.1f} + {route.duration_hours:.1f} > {self.max_weekly_hours}) for route {route.route_name}")
+            return False
+        
+        # Check consecutive hours limit (NEW!)
+        if not self.can_assign_consecutive_hours(driver_id, route.date, route.duration_hours):
+            current_consecutive = self.get_driver_consecutive_hours(driver_id, route.date)
+            logger.warning(f"Fixed assignment failed: Driver {driver_id} ({self.drivers[driver_id].name}) would exceed consecutive hours limit ({current_consecutive:.1f} + {route.duration_hours:.1f} > {self.max_consecutive_hours}) for route {route.route_name} on {route.date}")
+            return False
+            
+        return True
+    
+    def get_valid_driver_route_pairs(self, drivers: Dict[str, Driver], routes: List[Route], 
+                                   date: str, driver_remaining_hours: Dict[str, float]) -> List[Tuple[str, str]]:
+        """Get all valid driver-route pairs for optimization"""
+        valid_pairs = []
+        
+        for route in routes:
+            for driver_id, driver in drivers.items():
+                # Skip if driver not available
+                if not self.is_driver_available(driver_id, date):
+                    continue
+                    
+                # Skip if insufficient monthly hours
+                if driver_remaining_hours[driver_id] < route.duration_hours:
+                    continue
+                
+                # Skip if would exceed weekly hour limit
+                if not self.can_assign_hours(driver_id, date, route.duration_hours):
+                    continue
+                
+                # Skip if would exceed consecutive hours limit (NEW!)
+                if not self.can_assign_consecutive_hours(driver_id, date, route.duration_hours):
+                    continue
+                    
+                valid_pairs.append((driver_id, route.route_id))
+        
+        return valid_pairs
+    
+    def add_optimization_constraints(self, solver, x, valid_pairs, flexible_routes, 
+                                   driver_remaining_hours, fixed_assignments, date):
+        """Add all optimization constraints including weekly and consecutive hour limits"""
+        # Route constraints - each route assigned at most once
+        for route in flexible_routes:
+            route_vars = [x[(driver_id, route_id)] for driver_id, route_id in valid_pairs if route_id == route.route_id]
+            if route_vars:
+                solver.Add(sum(route_vars) <= 1, f'route_{route.route_id}')
+        
+        # Driver daily constraints - max one route per day (accounting for fixed assignments)
+        for driver_id in self.drivers:
+            has_fixed_assignment = any(
+                assignment.driver_id == driver_id for assignment in fixed_assignments
+            )
+            
+            max_routes = 0 if has_fixed_assignment else 1
+            driver_vars = [x[(d_id, route_id)] for d_id, route_id in valid_pairs if d_id == driver_id]
+            
+            if driver_vars:
+                solver.Add(sum(driver_vars) <= max_routes, f'driver_{driver_id}_daily')
+        
+        # Monthly capacity constraints
+        for driver_id in self.drivers:
+            remaining = driver_remaining_hours[driver_id]
+            driver_route_vars = []
+            
+            for d_id, route_id in valid_pairs:
+                if d_id == driver_id:
+                    route = next(r for r in flexible_routes if r.route_id == route_id)
+                    driver_route_vars.append(x[(d_id, route_id)] * route.duration_hours)
+            
+            if driver_route_vars and remaining > 0:
+                solver.Add(sum(driver_route_vars) <= remaining, f'capacity_{driver_id}')
+        
+        # Weekly hour constraints
+        for driver_id in self.drivers:
+            current_weekly_hours = self.get_driver_weekly_hours(driver_id, date)
+            remaining_weekly_hours = self.max_weekly_hours - current_weekly_hours
+            
+            if remaining_weekly_hours > 0:
+                weekly_route_vars = []
+                
+                for d_id, route_id in valid_pairs:
+                    if d_id == driver_id:
+                        route = next(r for r in flexible_routes if r.route_id == route_id)
+                        weekly_route_vars.append(x[(d_id, route_id)] * route.duration_hours)
+                
+                if weekly_route_vars:
+                    solver.Add(sum(weekly_route_vars) <= remaining_weekly_hours, f'weekly_{driver_id}')
+        
+        # Consecutive hours constraints (FIXED!)
+        for driver_id in self.drivers:
+            current_consecutive_hours = self.get_driver_consecutive_hours(driver_id, date)
+            remaining_consecutive_hours = self.max_consecutive_hours - current_consecutive_hours
+            
+            if remaining_consecutive_hours > 0:
+                consecutive_route_vars = []
+                
+                for d_id, route_id in valid_pairs:
+                    if d_id == driver_id:
+                        route = next(r for r in flexible_routes if r.route_id == route_id)
+                        consecutive_route_vars.append(x[(d_id, route_id)] * route.duration_hours)
+                
+                if consecutive_route_vars:
+                    solver.Add(sum(consecutive_route_vars) <= remaining_consecutive_hours, 
+                             f'consecutive_{driver_id}')
+                    logger.debug(f"Added consecutive hours constraint for {driver_id} on {date}: {remaining_consecutive_hours:.1f}h remaining (current consecutive: {current_consecutive_hours:.1f}h)")
+            else:
+                logger.debug(f"Driver {driver_id} blocked from assignments on {date} due to consecutive hours limit (current: {current_consecutive_hours:.1f}h)")
+    
+    def set_optimization_objective(self, solver, x, valid_pairs, driver_remaining_hours):
+        """Set the optimization objective"""
+        objective_terms = []
+        for driver_id, route_id in valid_pairs:
+            remaining_hours = driver_remaining_hours[driver_id]
+            
+            assignment_weight = 100
+            capacity_weight = remaining_hours * 5
+            flexibility_weight = max(1, remaining_hours / 8.0) * 10
+            
+            total_weight = assignment_weight + capacity_weight + flexibility_weight
+            objective_terms.append(x[(driver_id, route_id)] * total_weight)
+        
+        if objective_terms:
+            solver.Maximize(sum(objective_terms))
+    
+    def get_solver_status_string(self, status) -> str:
+        """Convert solver status to readable string"""
+        status_map = {
+            pywraplp.Solver.OPTIMAL: "Optimal",
+            pywraplp.Solver.FEASIBLE: "Feasible",
+            pywraplp.Solver.INFEASIBLE: "Infeasible",
+            pywraplp.Solver.UNBOUNDED: "Unbounded",
+            pywraplp.Solver.ABNORMAL: "Abnormal",
+            pywraplp.Solver.NOT_SOLVED: "Not Solved"
+        }
+        return status_map.get(status, f"Unknown ({status})")
+    
+    def optimize_all_assignments(self) -> Dict[str, DailyReport]:
+        """Main optimization method with day-by-day reporting"""
+        logger.info(f"Starting day-by-day optimization process with {self.max_weekly_hours}h weekly and {self.max_consecutive_hours}h consecutive limits...")
+        
+        # Initialize driver remaining hours
+        driver_remaining_hours = {
+            driver_id: driver.monthly_hours 
+            for driver_id, driver in self.drivers.items()
+        }
+        
+        # Get all dates and sort chronologically
+        dates = sorted(self.routes_by_date.keys())
+        logger.info(f"Processing {len(dates)} dates in chronological order")
+        
+        daily_reports = {}
+        
+        # Process each date
+        for date in dates:
+            routes = self.routes_by_date[date]
+            daily_report = self.optimize_single_day(date, routes, driver_remaining_hours)
+            daily_reports[date] = daily_report
+        
+        # Generate overall statistics
+        self.generate_overall_statistics(daily_reports, driver_remaining_hours)
+        
+        self.daily_reports = daily_reports
+        logger.info("Day-by-day optimization completed successfully!")
+        
+        return daily_reports
+    
+    def generate_overall_statistics(self, daily_reports: Dict[str, DailyReport], 
+                                   final_remaining_hours: Dict[str, float]):
+        """Generate overall optimization statistics with weekly and consecutive hour tracking"""
+        total_routes = sum(report.total_routes for report in daily_reports.values())
+        total_assigned = sum(report.assigned_routes for report in daily_reports.values())
+        total_fixed = sum(report.fixed_assignments for report in daily_reports.values())
+        total_optimized = sum(report.optimized_assignments for report in daily_reports.values())
+        
+        overall_assignment_rate = (total_assigned / total_routes * 100) if total_routes > 0 else 0
+        
+        # Driver utilization with weekly and consecutive hour tracking
+        driver_utilization = {}
+        weekly_violations = []
+        consecutive_violations = []
+        
+        for driver_id, driver in self.drivers.items():
+            remaining = final_remaining_hours[driver_id]
+            used_hours = driver.monthly_hours - remaining
+            utilization_rate = (used_hours / driver.monthly_hours * 100) if driver.monthly_hours > 0 else 0
+            
+            # Calculate weekly hours summary
+            weekly_hours_summary = {}
+            max_weekly_hours = 0
+            total_weeks_over_limit = 0
+            
+            if driver_id in self.driver_weekly_hours:
+                for week_start, hours in self.driver_weekly_hours[driver_id].items():
+                    weekly_hours_summary[week_start] = hours
+                    max_weekly_hours = max(max_weekly_hours, hours)
+                    
+                    if hours > self.max_weekly_hours:
+                        total_weeks_over_limit += 1
+                        weekly_violations.append({
+                            'driver_id': driver_id,
+                            'driver_name': driver.name,
+                            'week_start': week_start,
+                            'hours': hours,
+                            'limit': self.max_weekly_hours,
+                            'excess': hours - self.max_weekly_hours
+                        })
+            
+            # Calculate consecutive hours violations
+            max_consecutive_hours = 0
+            consecutive_periods_over_limit = 0
+            
+            if driver_id in self.driver_assignments_by_date:
+                driver_schedule = self.driver_assignments_by_date[driver_id]
+                dates = sorted(driver_schedule.keys())
+                
+                for i, date in enumerate(dates):
+                    consecutive_hours = self.get_driver_consecutive_hours(driver_id, date)
+                    max_consecutive_hours = max(max_consecutive_hours, consecutive_hours)
+                    
+                    if consecutive_hours > self.max_consecutive_hours:
+                        consecutive_periods_over_limit += 1
+                        consecutive_violations.append({
+                            'driver_id': driver_id,
+                            'driver_name': driver.name,
+                            'date': date,
+                            'consecutive_hours': consecutive_hours,
+                            'limit': self.max_consecutive_hours,
+                            'excess': consecutive_hours - self.max_consecutive_hours
+                        })
+            
+            driver_utilization[driver_id] = {
+                'name': driver.name,
+                'monthly_capacity_hours': driver.monthly_hours,
+                'hours_used': used_hours,
+                'hours_remaining': remaining,
+                'utilization_rate': utilization_rate,
+                'weekly_hours_summary': weekly_hours_summary,
+                'max_weekly_hours': max_weekly_hours,
+                'weeks_over_limit': total_weeks_over_limit,
+                'weekly_limit_compliance': max_weekly_hours <= self.max_weekly_hours,
+                'max_consecutive_hours': max_consecutive_hours,
+                'consecutive_periods_over_limit': consecutive_periods_over_limit,
+                'consecutive_limit_compliance': max_consecutive_hours <= self.max_consecutive_hours
+            }
+        
+        self.overall_statistics = {
+            'total_routes': total_routes,
+            'total_assigned': total_assigned,
+            'total_unassigned': total_routes - total_assigned,
+            'total_fixed_assignments': total_fixed,
+            'total_optimized_assignments': total_optimized,
+            'overall_assignment_rate': overall_assignment_rate,
+            'driver_utilization': driver_utilization,
+            'weekly_hour_limit': self.max_weekly_hours,
+            'consecutive_hour_limit': self.max_consecutive_hours,
+            'weekly_violations': weekly_violations,
+            'consecutive_violations': consecutive_violations,
+            'total_weekly_violations': len(weekly_violations),
+            'total_consecutive_violations': len(consecutive_violations),
+            'daily_summary': {
+                date: {
+                    'assigned': report.assigned_routes,
+                    'total': report.total_routes,
+                    'rate': report.assignment_rate
+                }
+                for date, report in daily_reports.items()
+            }
+        }
+        
+        # Log violations
+        if weekly_violations:
+            logger.warning(f"Found {len(weekly_violations)} weekly hour limit violations!")
+            for violation in weekly_violations:
+                logger.warning(f"  {violation['driver_name']}: {violation['hours']:.1f}h in week {violation['week_start']} (limit: {violation['limit']}h)")
+        else:
+            logger.info("✅ All drivers comply with weekly hour limits!")
+        
+        if consecutive_violations:
+            logger.warning(f"Found {len(consecutive_violations)} consecutive hour limit violations!")
+            for violation in consecutive_violations:
+                logger.warning(f"  {violation['driver_name']}: {violation['consecutive_hours']:.1f}h consecutive on {violation['date']} (limit: {violation['limit']}h)")
+        else:
+            logger.info("✅ All drivers comply with consecutive hour limits!")
+    
+    def get_daily_report(self, date: str) -> Optional[DailyReport]:
+        """Get report for a specific day"""
+        return self.daily_reports.get(date)
+    
+    def get_all_daily_reports(self) -> Dict[str, DailyReport]:
+        """Get all daily reports"""
+        return self.daily_reports
+    
+    def get_overall_statistics(self) -> Dict:
+        """Get overall statistics"""
+        return self.overall_statistics
+    
+    def print_daily_summary(self):
+        """Print a nice summary of all days"""
+        print("\n" + "="*80)
+        print("DAILY OPTIMIZATION SUMMARY")
+        print("="*80)
+        print(f"Limits: Weekly {self.max_weekly_hours}h, Consecutive {self.max_consecutive_hours}h")
+        
+        for date in sorted(self.daily_reports.keys()):
+            report = self.daily_reports[date]
+            print(f"\n📅 {date} ({report.day_of_week})")
+            print(f"   Routes: {report.assigned_routes}/{report.total_routes} assigned ({report.assignment_rate:.1f}%)")
+            print(f"   Fixed: {report.fixed_assignments}, Optimized: {report.optimized_assignments}")
+            print(f"   Solver: {report.solver_status}")
+            print(f"   Time: {report.optimization_time_seconds:.2f}s")
+            
+            if report.unassigned_route_names:
+                print(f"   ⚠️  Unassigned: {', '.join(report.unassigned_route_names)}")
+    
+    def print_consecutive_hours_analysis(self):
+        """Print detailed analysis of consecutive hours for each driver"""
+        print("\n" + "="*80)
+        print("CONSECUTIVE HOURS ANALYSIS")
+        print("="*80)
+        print(f"Consecutive Limit: {self.max_consecutive_hours}h")
+        
+        dates = sorted(self.routes_by_date.keys())
+        
+        for driver_id, driver in self.drivers.items():
+            if driver_id not in self.driver_assignments_by_date:
+                continue
+                
+            driver_schedule = self.driver_assignments_by_date[driver_id]
+            if not driver_schedule:
+                continue
+                
+            print(f"\n👤 {driver.name} (ID: {driver_id}):")
+            
+            for date in dates:
+                if date in driver_schedule:
+                    consecutive_before = self.get_driver_consecutive_hours(driver_id, date)
+                    consecutive_including = self.get_driver_consecutive_hours_including_date(driver_id, date)
+                    hours_today = driver_schedule[date]
+                    
+                    status = "🔴" if consecutive_including > self.max_consecutive_hours else "✅"
+                    
+                    print(f"   {date}: {hours_today:.1f}h today, {consecutive_before:.1f}h before, {consecutive_including:.1f}h total consecutive {status}")
+                    
+                    if consecutive_including > self.max_consecutive_hours:
+                        print(f"      ⚠️  VIOLATION: {consecutive_including:.1f}h > {self.max_consecutive_hours}h limit")
+                else:
+                    print(f"   {date}: REST DAY 💤")
+    
+    def print_constraint_violations(self):
+        """Print detailed constraint violation report"""
+        stats = self.overall_statistics
+        
+        print("\n" + "="*80)
+        print("CONSTRAINT VIOLATIONS REPORT")
+        print("="*80)
+        
+        # Weekly violations
+        weekly_violations = stats.get('weekly_violations', [])
+        if weekly_violations:
+            print(f"\n🔴 WEEKLY HOUR VIOLATIONS ({len(weekly_violations)} found):")
+            for violation in weekly_violations:
+                print(f"   {violation['driver_name']}: {violation['hours']:.1f}h in week {violation['week_start']} "
+                      f"(limit: {violation['limit']}h, excess: +{violation['excess']:.1f}h)")
+        else:
+            print(f"\n✅ WEEKLY HOUR COMPLIANCE: All drivers within {self.max_weekly_hours}h limit")
+        
+        # Consecutive violations
+        consecutive_violations = stats.get('consecutive_violations', [])
+        if consecutive_violations:
+            print(f"\n🔴 CONSECUTIVE HOUR VIOLATIONS ({len(consecutive_violations)} found):")
+            for violation in consecutive_violations:
+                print(f"   {violation['driver_name']}: {violation['consecutive_hours']:.1f}h consecutive ending {violation['date']} "
+                      f"(limit: {violation['limit']}h, excess: +{violation['excess']:.1f}h)")
+        else:
+            print(f"\n✅ CONSECUTIVE HOUR COMPLIANCE: All drivers within {self.max_consecutive_hours}h limit")
+        
+        # Driver compliance summary
+        print(f"\n📊 DRIVER COMPLIANCE SUMMARY:")
+        for driver_id, utilization in stats['driver_utilization'].items():
+            weekly_status = "✅" if utilization['weekly_limit_compliance'] else "🔴"
+            consecutive_status = "✅" if utilization['consecutive_limit_compliance'] else "🔴"
+            print(f"   {utilization['name']}: Weekly {weekly_status} Consecutive {consecutive_status}")
+        
+        # Call the detailed consecutive analysis
+        self.print_consecutive_hours_analysis()
+    
+    def get_daily_reports_json(self) -> str:
+        """Get all daily reports in JSON format"""
+        json_reports = {}
+        for date, report in self.daily_reports.items():
+            json_reports[date] = report.to_dict()
+        
+        return json.dumps(json_reports, indent=2, default=str)
+    
+    def get_overall_statistics_json(self) -> str:
+        """Get overall statistics in JSON format"""
+        return json.dumps(self.overall_statistics, indent=2, default=str)
+
+
+# Enhanced production interface
+def create_enhanced_optimizer(max_weekly_hours: float = 48.0, max_consecutive_hours: float = 36.0) -> EnhancedDriverRouteOptimizer:
+    """Create a new enhanced optimizer instance with weekly and consecutive hour limits"""
+    return EnhancedDriverRouteOptimizer(max_weekly_hours, max_consecutive_hours)
+
+
+def run_day_by_day_optimization(driver_data: List[Dict], route_data: List[Dict], 
+                               availability_data: List[Dict], 
+                               fixed_assignments_data: List[Dict] = None,
+                               max_weekly_hours: float = 48.0,
+                               max_consecutive_hours: float = 36.0) -> Tuple[Dict[str, DailyReport], Dict]:
+    """
+    Run optimization with detailed day-by-day reporting and weekly + consecutive hour limits
+    
+    Args:
+        max_weekly_hours: Maximum hours per driver per week (default: 48.0)
+        max_consecutive_hours: Maximum consecutive hours without a break day (default: 36.0)
+    
+    Returns:
+        Tuple of (daily_reports_dict, overall_statistics_dict)
+    """
+    optimizer = EnhancedDriverRouteOptimizer(max_weekly_hours, max_consecutive_hours)
+    
+    # Load data
+    optimizer.load_drivers(driver_data)
+    optimizer.load_routes(route_data, fixed_assignments_data)
+    optimizer.load_availability(availability_data)
+    
+    # Run optimization
+    daily_reports = optimizer.optimize_all_assignments()
+    overall_statistics = optimizer.get_overall_statistics()
+    
+    return daily_reports, overall_statistics
+
+
+if __name__ == "__main__":
+    print("Enhanced DriverRouteOptimizer with Consecutive Hours Constraint ready!")
+    print("\nFeatures:")
+    print("- Weekly hour limit (default: 48h)")
+    print("- Consecutive hour limit (default: 36h) - prevents drivers from working too many days in a row")
+    print("- Day-by-day optimization and reporting")
+    print("- Detailed constraint violation tracking")
+    print("\nUsage:")
+    print("from enhanced_optimizer import create_enhanced_optimizer, run_day_by_day_optimization")
+    print("optimizer = create_enhanced_optimizer(max_weekly_hours=48.0, max_consecutive_hours=36.0)")
+    print("daily_reports, stats = run_day_by_day_optimization(drivers, routes, availability, fixed)")
+    print("optimizer.print_constraint_violations()  # See all violations")
+    print("optimizer.print_consecutive_hours_analysis()  # Detailed consecutive hours analysis")
