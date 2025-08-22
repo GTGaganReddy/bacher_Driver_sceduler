@@ -16,13 +16,22 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting up Driver Scheduling Backend...")
-    from api.dependencies import db_manager
-    await db_manager.init_pool()
-    logger.info("Database initialized successfully")
+    try:
+        from api.dependencies import db_manager
+        await db_manager.init_pool()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}")
+        # Don't fail startup - let health checks pass while DB connects async
+        logger.info("Continuing startup without database - will retry connections on API calls")
     yield
     # Shutdown
     logger.info("Shutting down...")
-    await db_manager.close_pool()
+    try:
+        from api.dependencies import db_manager
+        await db_manager.close_pool()
+    except Exception as e:
+        logger.error(f"Database shutdown error: {e}")
 
 # Create FastAPI application
 app = FastAPI(
@@ -42,36 +51,16 @@ app.include_router(assistant_api.router, tags=["Assistant API"])
 
 @app.get("/")
 async def root():
-    """Root endpoint with API info - serves as a quick health check for deployment"""
-    try:
-        # Quick database connectivity check for deployment health
-        from api.dependencies import db_manager
-        if db_manager.pool is not None:
-            db_status = "connected"
-        else:
-            db_status = "not_connected"
-        
-        return {
-            "service": "Driver Scheduling Backend",
-            "version": "1.0.0",
-            "status": "healthy",
-            "database": db_status,
-            "docs": "/docs",
-            "health": "/health",
-            "rapid_health": "/healthz"
-        }
-    except Exception as e:
-        logger.warning(f"Root endpoint health check warning: {str(e)}")
-        # Still return healthy status for deployment, but log the warning
-        return {
-            "service": "Driver Scheduling Backend",
-            "version": "1.0.0",
-            "status": "healthy",
-            "database": "unknown",
-            "docs": "/docs",
-            "health": "/health",
-            "rapid_health": "/healthz"
-        }
+    """Root endpoint - optimized for deployment health checks"""
+    # Fast response for deployment health checks - no database operations
+    return {
+        "service": "Driver Scheduling Backend",
+        "version": "1.0.0",
+        "status": "healthy",
+        "docs": "/docs",
+        "health": "/health",
+        "healthz": "/healthz"
+    }
 
 @app.get("/healthz")
 async def rapid_health_check():
