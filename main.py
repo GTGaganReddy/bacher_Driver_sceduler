@@ -76,7 +76,18 @@ async def root():
 @app.get("/healthz")
 async def rapid_health_check():
     """Rapid health check endpoint for deployment health checks - always responds quickly"""
-    return {"status": "ok", "timestamp": "deployment-ready"}
+    try:
+        # Quick response for health checks - don't test DB to avoid timeouts
+        return {
+            "status": "ok", 
+            "timestamp": "deployment-ready",
+            "service": "driver-scheduling-backend",
+            "version": "1.0.0"
+        }
+    except Exception as e:
+        logger.error(f"Health check error: {e}")
+        # Still return ok for deployment health checks
+        return {"status": "ok", "error": str(e)}
 
 @app.get("/ready")
 async def readiness_check():
@@ -90,31 +101,44 @@ async def liveness_check():
 
 if __name__ == "__main__":
     import uvicorn
-    # Always use PORT environment variable for deployment (Cloud Run sets this)
-    port = int(os.getenv("PORT", 5000))
-    logger.info(f"Starting FastAPI server on host 0.0.0.0 port {port}")
-    logger.info(f"Environment: {'DEPLOYMENT' if settings.IS_DEPLOYMENT else 'DEVELOPMENT'}")
-    logger.info(f"Debug mode: {settings.DEBUG}")
     
-    # Disable reload in production for deployment stability
-    reload = settings.DEBUG and not settings.IS_DEPLOYMENT
-    
-    # Production-optimized uvicorn configuration
-    uvicorn_config = {
-        "app": "main:app",
-        "host": "0.0.0.0",
-        "port": port,
-        "reload": reload
-    }
-    
-    # Additional production settings for deployment
-    if settings.IS_DEPLOYMENT:
-        uvicorn_config.update({
-            "workers": 1,  # Single worker for Cloud Run
-            "log_level": "info",
-            "access_log": True,
-            "use_colors": False  # Better for deployment logs
-        })
-        logger.info("Production configuration applied for deployment")
-    
-    uvicorn.run(**uvicorn_config)
+    try:
+        # Always use PORT environment variable for deployment (Cloud Run sets this)
+        port = int(os.getenv("PORT", 5000))
+        logger.info(f"Starting FastAPI server on host 0.0.0.0 port {port}")
+        logger.info(f"Environment: {'DEPLOYMENT' if settings.IS_DEPLOYMENT else 'DEVELOPMENT'}")
+        logger.info(f"Debug mode: {settings.DEBUG}")
+        
+        # Disable reload in production for deployment stability
+        reload = settings.DEBUG and not settings.IS_DEPLOYMENT
+        
+        # Production-optimized uvicorn configuration for Cloud Run compatibility
+        uvicorn_config = {
+            "host": "0.0.0.0",
+            "port": port,
+            "reload": reload,
+            "timeout_keep_alive": 30,  # Cloud Run timeout compatibility
+            "timeout_graceful_shutdown": 30,  # Graceful shutdown
+        }
+        
+        # Additional production settings for deployment
+        if settings.IS_DEPLOYMENT or os.getenv("PORT"):  # Cloud Run sets PORT
+            uvicorn_config.update({
+                "workers": 1,  # Single worker for Cloud Run
+                "log_level": "info",
+                "access_log": True,
+                "use_colors": False,  # Better for deployment logs
+                "loop": "uvloop",  # Performance boost if available
+            })
+            logger.info("Cloud Run production configuration applied")
+        else:
+            logger.info("Development configuration applied")
+        
+        # Start the server directly without app string to avoid import issues
+        uvicorn.run(app, **uvicorn_config)
+        
+    except Exception as e:
+        logger.error(f"Failed to start server: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
