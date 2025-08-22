@@ -1,0 +1,73 @@
+-- First, delete all existing data from the routes table
+DELETE FROM routes;
+
+-- Reset the sequence for route_id (if it's auto-incrementing)
+-- Note: Replace 'routes_route_id_seq' with your actual sequence name if different
+SELECT setval('routes_route_id_seq', 1, false);
+
+-- Insert the corrected route data
+INSERT INTO routes (route_id, date, route_name, details, day_of_week, created_at) VALUES
+-- Monday 07/07/2025 routes (8 routes)
+(1, '2025-07-07', '431oS', '{"type":"regular","duration_hours":8}', 'Monday', '2025-08-22 00:00:00'),
+(2, '2025-07-07', '432oS', '{"type":"regular","duration_hours":8}', 'Monday', '2025-08-22 00:00:00'),
+(3, '2025-07-07', '433oS', '{"type":"regular","duration_hours":8}', 'Monday', '2025-08-22 00:00:00'),
+(4, '2025-07-07', '434oS', '{"type":"regular","duration_hours":8}', 'Monday', '2025-08-22 00:00:00'),
+(5, '2025-07-07', '437oS', '{"type":"regular","duration_hours":8}', 'Monday', '2025-08-22 00:00:00'),
+(6, '2025-07-07', '438oS', '{"type":"regular","duration_hours":8}', 'Monday', '2025-08-22 00:00:00'),
+(7, '2025-07-07', '439oS', '{"type":"regular","duration_hours":8}', 'Monday', '2025-08-22 00:00:00'),
+(8, '2025-07-07', '440oS', '{"type":"regular","duration_hours":8}', 'Monday', '2025-08-22 00:00:00'),
+
+-- Tuesday 08/07/2025 routes (8 routes)
+(9, '2025-07-08', '431oS', '{"type":"regular","duration_hours":8}', 'Tuesday', '2025-08-22 00:00:00'),
+(10, '2025-07-08', '432oS', '{"type":"regular","duration_hours":8}', 'Tuesday', '2025-08-22 00:00:00'),
+(11, '2025-07-08', '433oS', '{"type":"regular","duration_hours":8}', 'Tuesday', '2025-08-22 00:00:00'),
+(12, '2025-07-08', '434oS', '{"type":"regular","duration_hours":8}', 'Tuesday', '2025-08-22 00:00:00'),
+(13, '2025-07-08', '437oS', '{"type":"regular","duration_hours":8}', 'Tuesday', '2025-08-22 00:00:00'),
+(14, '2025-07-08', '438oS', '{"type":"regular","duration_hours":8}', 'Tuesday', '2025-08-22 00:00:00'),
+(15, '2025-07-08', '439oS', '{"type":"regular","duration_hours":8}', 'Tuesday', '2025-08-22 00:00:00'),
+(16, '2025-07-08', '440oS', '{"type":"regular","duration_hours":8}', 'Tuesday', '2025-08-22 00:00:00'),
+
+-- Wednesday 09/07/2025 routes (8 routes)
+(17, '2025-07-09', '431oS', '{"type":"regular","duration_hours":8}', 'Wednesday', '2025-08-22 00:00:00'),
+(18, '2025-07-09', '432oS', '{"type":"regular","duration_hours":8}', 'Wednesday', '2025-08-22 00:00:00'),
+(19, '2025-07-09', '433oS', '{"type":"regular","duration_hours":8}', 'Wednesday', '2025-08-22 00:00:00'),
+(20, '2025-07-09', '434oS', '{"type":"regular","duration_hours":8}', 'Wednesday', '2025-08-22 00:00:00'),
+(21, '2025-07-09', '437oS', '{"type":"regular","duration_hours":8}', 'Wednesday', '2025-08-22 00:00:00'),
+(22, '2025-07-09', '438oS', '{"type":"regular","duration_hours":8}', 'Wednesday', '2025-08-22 00:00:00'),
+(23, '2025-07-09', '439oS', '{"type":"regular","duration_hours":8}', 'Wednesday', '2025-08-22 00:00:00'),
+(24, '2025-07-09', '440oS', '{"type":"regular","duration_hours":8}', 'Wednesday', '2025-08-22 00:00:00'),
+
+-- Thursday 10/07/2025 routes (8 routes)
+(25, '2025-07-10', '431oS', '{"type":"regular","duration_hours":8}', 'Thursday', '2025-08-22 00:00:00'),
+(26, '2025-07-10', '432oS', '{"type":"regular","duration_hours":8}', 'Thursday', '2025-08-22 00:00:00'),
+(27, '2025-07-10', '433oS', '{"type":"regular","duration_hours":8}', 'Thursday', '2025-08-22 00:00:00'),
+(28, '2025-07-10', '434oS', '{"type":"regular","duration_hours":8}', 'Thursday', '2025-08-22 00:00:00'),
+(29, '2025-07-10', '437oS', '{"type":"regular","duration_hours":8}', 'Thursday', '2025-08-22 00:00:00'),
+(30, '2025-07-10', '438oS', '{"type":"regular","duration_hours":8}', 'Thursday', '2025-08-22 00:00:00'),
+(31, '2025-07-10', '439oS', '{"type":"regular","duration_hours":8}', 'Thursday', '2025-08-22 00:00:00'),
+(32, '2025-07-10', '440oS', '{"type":"regular","duration_hours":8}', 'Thursday', '2025-08-22 00:00:00'),
+
+-- Friday 11/07/2025 routes (8 routes)
+(33, '2025-07-11', '431oS', '{"type":"regular","duration_hours":8}', 'Friday', '2025-08-22 00:00:00'),
+(34, '2025-07-11', '432oS', '{"type":"regular","duration_hours":8}', 'Friday', '2025-08-22 00:00:00'),
+(35, '2025-07-11', '433oS', '{"type":"regular","duration_hours":8}', 'Friday', '2025-08-22 00:00:00'),
+(36, '2025-07-11', '434oS', '{"type":"regular","duration_hours":8}', 'Friday', '2025-08-22 00:00:00'),
+(37, '2025-07-11', '437oS', '{"type":"regular","duration_hours":8}', 'Friday', '2025-08-22 00:00:00'),
+(38, '2025-07-11', '438oS', '{"type":"regular","duration_hours":8}', 'Friday', '2025-08-22 00:00:00'),
+(39, '2025-07-11', '439oS', '{"type":"regular","duration_hours":8}', 'Friday', '2025-08-22 00:00:00'),
+(40, '2025-07-11', '440oS', '{"type":"regular","duration_hours":8}', 'Friday', '2025-08-22 00:00:00'),
+
+-- Saturday 12/07/2025 routes (2 routes)
+(41, '2025-07-12', '451SA', '{"type":"regular","duration_hours":8}', 'Saturday', '2025-08-22 00:00:00'),
+(42, '2025-07-12', '452SA', '{"type":"regular","duration_hours":8}', 'Saturday', '2025-08-22 00:00:00');
+
+-- Verify the data was inserted correctly
+SELECT 
+    route_id, 
+    date, 
+    route_name, 
+    day_of_week,
+    details,
+    created_at
+FROM routes 
+ORDER BY route_id;
