@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  driver-scheduling-api:
+    build: .
+    container_name: driver-scheduling-api
+    restart: unless-stopped
+    ports:
+      - "80:8000"
+      - "443:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SUPABASE_PASSWORD=${SUPABASE_PASSWORD}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - GCF_URL=${GCF_URL}
+      - DEBUG=false
+      - PORT=8000
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=production
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - driver-scheduling-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Nginx reverse proxy for SSL termination
+  nginx:
+    image: nginx:alpine
+    container_name: driver-scheduling-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - driver-scheduling-api
+    networks:
+      - driver-scheduling-network
+
+networks:
+  driver-scheduling-network:
+    driver: bridge
+
+volumes:
+  logs:
