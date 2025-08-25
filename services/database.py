@@ -42,10 +42,15 @@ class DatabaseService:
     async def create_route(self, route_date: date, route_name: str, details: Optional[Dict] = None) -> int:
         """Create a new route"""
         async with self.db_manager.get_connection() as conn:
+            # Find next available route_id to avoid sequence/pooling issues
+            next_id = await conn.fetchval("""
+                SELECT COALESCE(MAX(route_id), 0) + 1 FROM routes
+            """)
+            
             route_id = await conn.fetchval("""
-                INSERT INTO routes (date, route_name, details) 
-                VALUES ($1, $2, $3) RETURNING route_id
-            """, route_date, route_name, json.dumps(details or {}))
+                INSERT INTO routes (route_id, date, route_name, details) 
+                VALUES ($1, $2, $3, $4) RETURNING route_id
+            """, next_id, route_date, route_name, json.dumps(details or {}))
             return route_id
     
     async def update_route(self, route_id: int, route_date: date, route_name: str, details: Optional[Dict] = None):
