@@ -192,24 +192,14 @@ class DatabaseService:
     
     async def save_assignments(self, week_start: date, assignments: List[Dict]):
         """Save optimized assignments for a week"""
-        try:
-            print(f"DATABASE: save_assignments called with week_start={week_start}, assignments count={len(assignments)}")
-            print(f"DATABASE: Sample assignment data: {assignments[:2] if assignments else 'No assignments'}")
-            
-            async with self.db_manager.get_connection() as conn:
-                # Delete existing assignments for this week first
-                delete_result = await conn.execute("DELETE FROM assignments WHERE week_start = $1", week_start)
-                print(f"DATABASE: Deleted existing assignments for {week_start}")
-                
-                # Insert new assignments
-                await conn.execute("""
-                    INSERT INTO assignments (week_start, assignments)
-                    VALUES ($1, $2)
-                """, week_start, json.dumps(assignments))
-                print(f"DATABASE: Successfully inserted {len(assignments)} assignments for {week_start}")
-        except Exception as e:
-            print(f"DATABASE ERROR: save_assignments failed: {e}")
-            raise e
+        async with self.db_manager.get_connection() as conn:
+            # Delete existing assignments for this week first
+            await conn.execute("DELETE FROM assignments WHERE week_start = $1", week_start)
+            # Insert new assignments
+            await conn.execute("""
+                INSERT INTO assignments (week_start, assignments)
+                VALUES ($1, $2)
+            """, week_start, json.dumps(assignments))
     
     async def get_assignments(self, week_start: date) -> Optional[List[Dict]]:
         """Get assignments for a specific week"""
