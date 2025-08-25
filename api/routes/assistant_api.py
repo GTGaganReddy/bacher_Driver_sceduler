@@ -275,7 +275,7 @@ async def add_route(request: RouteRequest):
         }
         
         # Add route to database
-        route_id = await db_service.create_route(route_date, request.route_name, route_details)
+        route_id = await db_service.create_route(route_date, request.route_name, request.day_of_week, route_details)
         logger.info(f"Created route {request.route_name} with ID {route_id}")
         
         # Rerun complete optimization with new route

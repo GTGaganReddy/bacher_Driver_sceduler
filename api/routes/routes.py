@@ -30,6 +30,7 @@ async def create_route(
         route_id = await db_service.create_route(
             route.date,
             route.route_name,
+            route.day_of_week,
             route.details
         )
         return SuccessResponse(
@@ -52,6 +53,7 @@ async def update_route(
             route_id,
             route.date,
             route.route_name,
+            route.day_of_week,
             route.details
         )
         return SuccessResponse(
