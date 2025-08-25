@@ -156,7 +156,7 @@ class RouteBackupManager:
             return []
     
     async def restore_original_routes(self) -> bool:
-        """Restore original system routes from backup"""
+        """Restore original system routes from backup with proper sequencing"""
         try:
             async with self.db_manager.get_connection() as conn:
                 # First, clear existing routes for the week
@@ -166,14 +166,21 @@ class RouteBackupManager:
                 """)
                 logger.info("Cleared existing routes for July 7-13, 2025")
                 
-                # Restore original routes
-                for route_data in ORIGINAL_ROUTES_BACKUP:
+                # Restore original routes with proper route_id sequence (1-42)
+                for idx, route_data in enumerate(ORIGINAL_ROUTES_BACKUP, 1):
+                    route_date = datetime.strptime(route_data['date'], '%Y-%m-%d').date()
+                    # Derive day_of_week from date
+                    weekday_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                    day_of_week = weekday_names[route_date.weekday()]
+                    
                     await conn.execute("""
-                        INSERT INTO routes (date, route_name, details, created_at)
-                        VALUES ($1, $2, $3, $4)
+                        INSERT INTO routes (route_id, date, route_name, day_of_week, details, created_at)
+                        VALUES ($1, $2, $3, $4, $5, $6)
                     """, 
-                    datetime.strptime(route_data['date'], '%Y-%m-%d').date(),
+                    idx,  # route_id starts from 1
+                    route_date,
                     route_data['route_name'],
+                    day_of_week,
                     json.dumps(route_data['details']),
                     datetime(2025, 8, 11, 21, 10, 0)  # Original system timestamp
                     )
@@ -216,7 +223,7 @@ class RouteBackupManager:
             return []
     
     async def restore_missing_routes(self) -> int:
-        """Restore only the missing original routes"""
+        """Restore only the missing original routes with proper sequencing"""
         try:
             missing_routes = await self.check_missing_routes()
             if not missing_routes:
@@ -225,19 +232,30 @@ class RouteBackupManager:
             
             restored_count = 0
             async with self.db_manager.get_connection() as conn:
+                # Get the next available route_id 
+                next_id = await conn.fetchval("SELECT COALESCE(MAX(route_id), 0) + 1 FROM routes")
+                
                 for route_data in ORIGINAL_ROUTES_BACKUP:
                     route_key = f"{route_data['route_name']} on {route_data['date']}"
                     if route_key in missing_routes:
+                        route_date = datetime.strptime(route_data['date'], '%Y-%m-%d').date()
+                        # Derive day_of_week from date
+                        weekday_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                        day_of_week = weekday_names[route_date.weekday()]
+                        
                         await conn.execute("""
-                            INSERT INTO routes (date, route_name, details, created_at)
-                            VALUES ($1, $2, $3, $4)
+                            INSERT INTO routes (route_id, date, route_name, day_of_week, details, created_at)
+                            VALUES ($1, $2, $3, $4, $5, $6)
                         """, 
-                        datetime.strptime(route_data['date'], '%Y-%m-%d').date(),
+                        next_id,
+                        route_date,
                         route_data['route_name'],
+                        day_of_week,
                         json.dumps(route_data['details']),
                         datetime(2025, 8, 11, 21, 10, 0)  # Original system timestamp
                         )
                         restored_count += 1
+                        next_id += 1
             
             logger.info(f"Restored {restored_count} missing routes")
             return restored_count

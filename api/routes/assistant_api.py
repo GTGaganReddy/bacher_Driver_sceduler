@@ -459,15 +459,13 @@ async def reset_system():
             
             logger.info("Reset driver availability - weekdays available, Sunday unavailable")
         
-        # Check for missing original routes and restore them
-        missing_routes = await backup_manager.check_missing_routes()
-        restored_routes_count = 0
-        if missing_routes:
-            logger.warning(f"Found {len(missing_routes)} missing original routes - restoring them")
-            restored_routes_count = await backup_manager.restore_missing_routes()
-            logger.info(f"Restored {restored_routes_count} missing original routes")
+        # Restore all original routes with proper sequencing (route_id 1-42)
+        logger.info("Restoring all original routes with proper route_id sequence (1-42)")
+        route_restore_success = await backup_manager.restore_original_routes()
+        if route_restore_success:
+            logger.info("Successfully restored all 42 original routes with proper sequencing")
         else:
-            logger.info("All original routes are present - no restoration needed")
+            logger.error("Failed to restore original routes")
         
         # Reset fixed assignments to default state
         logger.info("Resetting fixed assignments to default state")
