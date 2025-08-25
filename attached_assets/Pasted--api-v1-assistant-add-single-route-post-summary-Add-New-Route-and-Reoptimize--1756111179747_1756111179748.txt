@@ -1,0 +1,64 @@
+ /api/v1/assistant/add-single-route:
+    post:
+      summary: Add New Route and Reoptimize
+      description: |
+        Add a new route to the database and automatically assign to optimal driver.
+        - Adds route to database
+        - Automatically assigns to optimal driver  
+        - Updates Google Sheets with new assignments
+        - Triggers complete system reoptimization
+      operationId: addNewRoute
+      tags:
+        - Route Management
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - route_name
+                - date
+                - duration_hours
+              properties:
+                route_name:
+                  type: string
+                  description: Name/identifier of the new route
+                  example: "EMERGENCY"
+                  minLength: 1
+                  maxLength: 50
+                date:
+                  type: string
+                  format: date
+                  description: Date for the route in YYYY-MM-DD format
+                  example: "2025-07-09"
+                duration_hours:
+                  type: number
+                  format: float
+                  minimum: 0.1
+                  maximum: 24.0
+                  description: |
+                    Duration in decimal hours:
+                    - 8.0 = 8 hours
+                    - 8.5 = 8 hours 30 minutes  
+                    - 6.25 = 6 hours 15 minutes
+                  example: 8.5
+      responses:
+        '200':
+          description: Route added and assigned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Route addition failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

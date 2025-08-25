@@ -1,0 +1,362 @@
+openapi: 3.0.3
+info:
+  title: Driver Scheduling Backend API
+  description: Backend service for logistics driver scheduling with OR-Tools optimization
+  version: 1.0.0
+  contact:
+    name: Driver Scheduling System
+    url: https://github.com/your-repo/driver-scheduling
+
+servers:
+  - url: http://0.0.0.0:5000
+    description: Local development server
+  - url: https://your-repl-name.your-username.repl.co
+    description: Production server
+
+tags:
+  - name: Assistant API
+    description: OpenAI Assistant integration endpoints
+  - name: Route Management
+    description: Route creation and management operations
+  - name: Driver Management
+    description: Driver and availability management
+  - name: Optimization
+    description: Scheduling optimization operations
+
+paths:
+  /api/v1/assistant/add-single-route:
+    post:
+      summary: Add New Route and Reoptimize
+      description: |
+        Add a new route to the database and automatically assign to optimal driver.
+        - Adds route to database with auto-derived day_of_week
+        - Automatically assigns to optimal driver using OR-Tools optimization
+        - Updates Google Sheets with new assignments
+        - Triggers complete system reoptimization
+      operationId: addNewRoute
+      tags:
+        - Route Management
+        - Assistant API
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - route_name
+                - date
+                - duration_hours
+              properties:
+                route_name:
+                  type: string
+                  description: Name/identifier of the new route
+                  example: "EMERGENCY"
+                  minLength: 1
+                  maxLength: 50
+                date:
+                  type: string
+                  format: date
+                  description: Date for the route in YYYY-MM-DD format (day_of_week is auto-derived)
+                  example: "2025-07-09"
+                duration_hours:
+                  type: number
+                  format: float
+                  minimum: 0.1
+                  maximum: 24.0
+                  description: |
+                    Duration in decimal hours:
+                    - 8.0 = 8 hours
+                    - 8.5 = 8 hours 30 minutes  
+                    - 6.25 = 6 hours 15 minutes
+                  example: 8.5
+            examples:
+              emergency_route:
+                summary: Emergency Route Example
+                value:
+                  route_name: "EMERGENCY"
+                  date: "2025-07-09"
+                  duration_hours: 8.5
+              short_route:
+                summary: Short Route Example
+                value:
+                  route_name: "500"
+                  date: "2025-07-10"
+                  duration_hours: 6.25
+      responses:
+        '200':
+          description: Route added and assigned successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          route_added:
+                            type: object
+                            properties:
+                              id:
+                                type: integer
+                                description: Database ID of the created route
+                              name:
+                                type: string
+                                description: Name of the created route
+                              date:
+                                type: string
+                                description: Date of the route
+                              duration_hours:
+                                type: number
+                                description: Duration in hours
+                          total_assignments:
+                            type: integer
+                            description: Total number of assignments after optimization
+                          total_routes:
+                            type: integer
+                            description: Total number of routes in the system
+                          google_sheets_updated:
+                            type: boolean
+                            description: Whether Google Sheets was successfully updated
+              examples:
+                successful_addition:
+                  summary: Successful Route Addition
+                  value:
+                    status: "success"
+                    message: "Route added and optimization completed"
+                    data:
+                      route_added:
+                        id: 123
+                        name: "EMERGENCY"
+                        date: "2025-07-09"
+                        duration_hours: 8.5
+                      total_assignments: 42
+                      total_routes: 52
+                      google_sheets_updated: true
+        '400':
+          description: Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_date:
+                  summary: Invalid Date Format
+                  value:
+                    error: "Invalid date format. Use YYYY-MM-DD"
+                    detail: "Date must be in YYYY-MM-DD format"
+                invalid_duration:
+                  summary: Invalid Duration
+                  value:
+                    error: "Duration must be between 0.1 and 24.0 hours"
+                    detail: "duration_hours: 25.0 exceeds maximum allowed value"
+        '500':
+          description: Route addition failed due to server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                optimization_failed:
+                  summary: Optimization Failed
+                  value:
+                    error: "Optimization failed"
+                    detail: "OR-Tools optimization could not find a valid solution"
+                database_error:
+                  summary: Database Error
+                  value:
+                    error: "Database operation failed"
+                    detail: "Unable to save route to database"
+
+  /api/v1/assistant/optimize-week:
+    post:
+      summary: Run Weekly Optimization
+      description: |
+        Execute complete weekly optimization using OR-Tools
+        - Fetches all drivers, routes, and availability data
+        - Runs enhanced OR-Tools optimization with constraints
+        - Updates Google Sheets with assignments
+        - Saves results to database
+      operationId: optimizeWeek
+      tags:
+        - Optimization
+        - Assistant API
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - week_start
+              properties:
+                week_start:
+                  type: string
+                  format: date
+                  description: Start date of the week to optimize (YYYY-MM-DD)
+                  example: "2025-07-07"
+      responses:
+        '200':
+          description: Optimization completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Missing drivers or routes data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Optimization failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/assistant/update-driver-availability:
+    post:
+      summary: Update Driver Availability
+      description: |
+        Update a single driver's availability for a specific date
+        - Updates driver availability in database
+        - Automatically triggers week reoptimization
+        - Updates Google Sheets with new assignments
+      operationId: updateDriverAvailability
+      tags:
+        - Driver Management
+        - Assistant API
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - driver_name
+                - date
+                - available
+              properties:
+                driver_name:
+                  type: string
+                  description: Full driver name as stored in database
+                  example: "Genäuß, Thomas"
+                date:
+                  type: string
+                  format: date
+                  description: Date to update availability for (YYYY-MM-DD)
+                  example: "2025-07-07"
+                available:
+                  type: boolean
+                  description: True if driver is available, False if unavailable
+                  example: false
+      responses:
+        '200':
+          description: Availability updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Driver not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Update failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    SuccessResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          example: "success"
+          description: Success status indicator
+        message:
+          type: string
+          example: "Operation completed successfully"
+          description: Human-readable success message
+        data:
+          type: object
+          description: Additional response data (varies by endpoint)
+          additionalProperties: true
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: "Invalid input"
+          description: Error type or category
+        detail:
+          type: string
+          example: "Missing required field: route_name"
+          description: Detailed error description
+        status_code:
+          type: integer
+          example: 400
+          description: HTTP status code
+
+    Route:
+      type: object
+      required:
+        - route_id
+        - date
+        - route_name
+      properties:
+        route_id:
+          type: integer
+          description: Unique route identifier
+          example: 123
+        date:
+          type: string
+          format: date
+          description: Route date
+          example: "2025-07-09"
+        route_name:
+          type: string
+          description: Route name/identifier
+          example: "431oS"
+        day_of_week:
+          type: string
+          description: Day of the week (auto-derived from date)
+          example: "Wednesday"
+        details:
+          type: object
+          description: Additional route details (JSONB)
+          additionalProperties: true
+
+    Driver:
+      type: object
+      required:
+        - driver_id
+        - name
+      properties:
+        driver_id:
+          type: integer
+          description: Unique driver identifier
+          example: 5
+        name:
+          type: string
+          description: Driver full name
+          example: "Kandolf, Alfred"
+        monthly_hours_limit:
+          type: integer
+          description: Monthly working hours limit
+          example: 174
+          default: 174

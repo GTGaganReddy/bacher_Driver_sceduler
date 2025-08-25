@@ -87,10 +87,12 @@ handle_scheduling_request(
   "duration_hours": 6.5
 }
 ```
-- Adds new route to specified date
+- Adds new route to specified date (day_of_week is automatically derived from date)
 - Runs complete OR-Tools reoptimization  
 - Assigns route to optimal driver
 - Updates Google Sheets with new assignments
+
+**Note**: The `day_of_week` field is now automatically calculated from the provided date, ensuring proper optimization algorithm consideration.
 
 ### **Remove Route** ⚡ **NEW FUNCTIONALITY**
 ```json
