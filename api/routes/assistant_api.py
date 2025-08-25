@@ -121,7 +121,20 @@ async def optimize_week(request: WeeklyOptimizationRequest):
         
         # Save results to database
         assignments = optimization_result.get('assignments', {})
-        await db_service.save_assignments(week_start, list(assignments.values()))
+        print(f"API DEBUG: About to save assignments - week_start={week_start}, assignments type={type(assignments)}")
+        print(f"API DEBUG: assignments.keys()={list(assignments.keys()) if assignments else 'None'}")
+        print(f"API DEBUG: assignments.values() count={len(list(assignments.values())) if assignments else 0}")
+        
+        try:
+            assignments_data = list(assignments.values())
+            print(f"API DEBUG: assignments_data type={type(assignments_data)}, length={len(assignments_data)}")
+            print(f"API DEBUG: First assignment sample: {assignments_data[0] if assignments_data else 'None'}")
+            
+            await db_service.save_assignments(week_start, assignments_data)
+            print(f"API DEBUG: save_assignments completed successfully")
+        except Exception as e:
+            print(f"API DEBUG ERROR: save_assignments failed: {e}")
+            raise e
         
         return {
             "status": "success",
