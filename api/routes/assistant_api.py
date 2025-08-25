@@ -651,6 +651,36 @@ async def add_fixed_assignment(request: FixedAssignmentRequest):
         if not success:
             raise HTTPException(status_code=500, detail="Failed to add fixed assignment")
         
+        # Rerun optimization and update sheets after adding fixed assignment
+        from services.google_sheets import GoogleSheetsService
+        from services.enhanced_optimizer import run_enhanced_ortools_optimization
+        
+        sheets_service = GoogleSheetsService()
+        week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
+        week_end = week_start + timedelta(days=6)
+        
+        # Get fresh data for optimization
+        drivers = await db_service.get_drivers()
+        routes = await db_service.get_routes_by_date_range(week_start, week_end)
+        availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        fixed_assignments = await db_service.get_fixed_assignments_by_date_range(week_start, week_end)
+        
+        # Run optimization with new fixed assignment
+        optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability, fixed_assignments)
+        
+        # Update Google Sheets
+        week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+        sheets_result = await sheets_service.update_sheet(
+            optimization_result,
+            all_drivers=drivers,
+            all_dates=week_dates
+        )
+        sheets_success = sheets_result is not None
+        
+        # Save results
+        assignments = optimization_result.get('assignments', {})
+        await db_service.save_assignments(week_start, list(assignments.values()))
+        
         return {
             "status": "success",
             "message": f"Fixed assignment added: {request.driver_name} → {request.route_name} on {request.date}",
@@ -660,7 +690,12 @@ async def add_fixed_assignment(request: FixedAssignmentRequest):
                 "route_name": request.route_name,
                 "route_id": route['route_id'],
                 "date": request.date
-            }
+            },
+            "optimization_rerun": True,
+            "sheets_updated": sheets_success,
+            "total_assignments": sum(len(day_assignments) for day_assignments in assignments.values()),
+            "assignments": assignments,
+            "stats": optimization_result.get('stats', {})
         }
         
     except Exception as e:
@@ -691,6 +726,36 @@ async def delete_fixed_assignment(request: DeleteFixedAssignmentRequest):
         if not success:
             raise HTTPException(status_code=500, detail="Failed to delete fixed assignment")
         
+        # Rerun optimization and update sheets after deleting fixed assignment
+        from services.google_sheets import GoogleSheetsService
+        from services.enhanced_optimizer import run_enhanced_ortools_optimization
+        
+        sheets_service = GoogleSheetsService()
+        week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
+        week_end = week_start + timedelta(days=6)
+        
+        # Get fresh data for optimization
+        drivers = await db_service.get_drivers()
+        routes = await db_service.get_routes_by_date_range(week_start, week_end)
+        availability = await db_service.get_availability_by_date_range(week_start, week_end)
+        fixed_assignments = await db_service.get_fixed_assignments_by_date_range(week_start, week_end)
+        
+        # Run optimization without the deleted fixed assignment
+        optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability, fixed_assignments)
+        
+        # Update Google Sheets
+        week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+        sheets_result = await sheets_service.update_sheet(
+            optimization_result,
+            all_drivers=drivers,
+            all_dates=week_dates
+        )
+        sheets_success = sheets_result is not None
+        
+        # Save results
+        assignments = optimization_result.get('assignments', {})
+        await db_service.save_assignments(week_start, list(assignments.values()))
+        
         return {
             "status": "success",
             "message": f"Fixed assignment deleted: {request.driver_name} on {request.date}",
@@ -698,7 +763,12 @@ async def delete_fixed_assignment(request: DeleteFixedAssignmentRequest):
                 "driver_name": request.driver_name,
                 "driver_id": driver['driver_id'],
                 "date": request.date
-            }
+            },
+            "optimization_rerun": True,
+            "sheets_updated": sheets_success,
+            "total_assignments": sum(len(day_assignments) for day_assignments in assignments.values()),
+            "assignments": assignments,
+            "stats": optimization_result.get('stats', {})
         }
         
     except Exception as e:
