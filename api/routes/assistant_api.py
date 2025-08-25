@@ -269,9 +269,8 @@ async def add_route(request: RouteRequest):
         
         # Create route details for database
         route_details = {
-            "route_code": request.route_name,
-            "duration": f"{int(request.duration_hours)}:{int((request.duration_hours % 1) * 60):02d}",
-            "type": request.route_type
+            "type": request.route_type,
+            "duration_hours": request.duration_hours
         }
         
         # Add route to database
