@@ -39,7 +39,7 @@ class DatabaseService:
             """, start_date, end_date)
             return [dict(row) for row in rows]
     
-    async def create_route(self, route_date: date, route_name: str, details: Optional[Dict] = None) -> int:
+    async def create_route(self, route_date: date, route_name: str, day_of_week: Optional[str] = None, details: Optional[Dict] = None) -> int:
         """Create a new route"""
         async with self.db_manager.get_connection() as conn:
             # Find next available route_id to avoid sequence/pooling issues
@@ -47,20 +47,30 @@ class DatabaseService:
                 SELECT COALESCE(MAX(route_id), 0) + 1 FROM routes
             """)
             
+            # Auto-derive day_of_week if not provided
+            if day_of_week is None:
+                weekday_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                day_of_week = weekday_names[route_date.weekday()]
+            
             route_id = await conn.fetchval("""
-                INSERT INTO routes (route_id, date, route_name, details) 
-                VALUES ($1, $2, $3, $4) RETURNING route_id
-            """, next_id, route_date, route_name, json.dumps(details or {}))
+                INSERT INTO routes (route_id, date, route_name, day_of_week, details) 
+                VALUES ($1, $2, $3, $4, $5) RETURNING route_id
+            """, next_id, route_date, route_name, day_of_week, json.dumps(details or {}))
             return route_id
     
-    async def update_route(self, route_id: int, route_date: date, route_name: str, details: Optional[Dict] = None):
+    async def update_route(self, route_id: int, route_date: date, route_name: str, day_of_week: Optional[str] = None, details: Optional[Dict] = None):
         """Update an existing route"""
         async with self.db_manager.get_connection() as conn:
+            # Auto-derive day_of_week if not provided
+            if day_of_week is None:
+                weekday_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                day_of_week = weekday_names[route_date.weekday()]
+                
             await conn.execute("""
                 UPDATE routes 
-                SET date = $1, route_name = $2, details = $3 
-                WHERE route_id = $4
-            """, route_date, route_name, json.dumps(details or {}), route_id)
+                SET date = $1, route_name = $2, day_of_week = $3, details = $4 
+                WHERE route_id = $5
+            """, route_date, route_name, day_of_week, json.dumps(details or {}), route_id)
     
     async def delete_route(self, route_id: int):
         """Delete a route"""

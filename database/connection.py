@@ -73,6 +73,7 @@ class DatabaseManager:
                     route_id SERIAL PRIMARY KEY,
                     date DATE NOT NULL,
                     route_name TEXT NOT NULL,
+                    day_of_week TEXT,
                     details JSONB,
                     created_at TIMESTAMP DEFAULT NOW()
                 );

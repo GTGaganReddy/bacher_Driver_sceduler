@@ -28,18 +28,21 @@ class DriverAvailability(BaseModel):
 class RouteCreate(BaseModel):
     date: date
     route_name: str
+    day_of_week: Optional[str] = None
     details: Optional[Dict[str, Any]] = {}
 
 class RouteUpdate(BaseModel):
     route_id: Optional[int] = None
     date: date
     route_name: str
+    day_of_week: Optional[str] = None
     details: Optional[Dict[str, Any]] = {}
 
 class Route(BaseModel):
     route_id: int
     date: date
     route_name: str
+    day_of_week: Optional[str] = None
     details: Optional[Any] = {}  # Support both dict and string from JSONB
 
 # Scheduling Models
