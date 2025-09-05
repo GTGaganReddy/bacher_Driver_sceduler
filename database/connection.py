@@ -42,69 +42,13 @@ class DatabaseManager:
         return self.pool.acquire()
     
     async def create_tables(self):
-        """Create all necessary tables"""
-        async with self.pool.acquire() as conn:
-            # Create drivers table
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS drivers (
-                    driver_id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    monthly_hours_limit INTEGER DEFAULT 174,
-                    created_at TIMESTAMP DEFAULT NOW()
-                );
-            """)
-            
-            # Create driver_availability table
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS driver_availability (
-                    id SERIAL PRIMARY KEY,
-                    driver_id INT REFERENCES drivers(driver_id) ON DELETE CASCADE,
-                    date DATE NOT NULL,
-                    available BOOLEAN NOT NULL DEFAULT TRUE,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    UNIQUE(driver_id, date)
-                );
-            """)
-            
-            # Create routes table
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS routes (
-                    route_id SERIAL PRIMARY KEY,
-                    date DATE NOT NULL,
-                    route_name TEXT NOT NULL,
-                    day_of_week TEXT,
-                    details JSONB,
-                    created_at TIMESTAMP DEFAULT NOW()
-                );
-            """)
-            
-            # Create assignments table
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS assignments (
-                    id SERIAL PRIMARY KEY,
-                    week_start DATE NOT NULL,
-                    assignments JSONB NOT NULL,
-                    created_at TIMESTAMP DEFAULT NOW()
-                );
-            """)
-            
-            # Create fixed assignments table
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS fixed_assignments (
-                    id SERIAL PRIMARY KEY,
-                    driver_id INTEGER NOT NULL,
-                    route_id INTEGER NOT NULL,
-                    date DATE NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(driver_id, route_id, date)
-                );
-            """)
-            
-            logger.info("All tables created successfully")
+        """Tables already exist in Supabase - no creation needed"""
+        logger.info("Using existing Supabase tables - no creation required")
     
     async def insert_july_2025_data(self):
-        """Insert authentic July 7-13, 2025 driver scheduling data matching your Supabase structure"""
+        """Data already exists in Supabase - no insertion needed"""
+        logger.info("Using existing Supabase data - no insertion required")
+        return
         async with self.pool.acquire() as conn:
             # Insert 21 real drivers with their actual monthly hour limits
             driver_count = await conn.fetchval("SELECT COUNT(*) FROM drivers")
@@ -181,7 +125,9 @@ class DatabaseManager:
                 logger.info(f"Inserted availability records for {len(drivers)} drivers for July 7-13, 2025")
 
     async def insert_default_data(self):
-        """Insert real drivers and routes if none exist"""
+        """Data already exists in Supabase - no insertion needed"""
+        logger.info("Using existing Supabase data - no insertion required")
+        return
         async with self.pool.acquire() as conn:
             # Insert real drivers with their monthly hours
             driver_count = await conn.fetchval("SELECT COUNT(*) FROM drivers")
