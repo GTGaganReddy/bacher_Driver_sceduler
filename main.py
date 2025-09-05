@@ -101,34 +101,34 @@ if __name__ == "__main__":
     import uvicorn
     
     try:
-        # Always use PORT environment variable for deployment (Cloud Run sets this)
+        # Use PORT environment variable for deployment, default to 5000 for development
         port = int(os.getenv("PORT", 5000))
         logger.info(f"Starting FastAPI server on host 0.0.0.0 port {port}")
-        logger.info(f"Environment: {'DEPLOYMENT' if settings.IS_DEPLOYMENT else 'DEVELOPMENT'}")
+        logger.info(f"Environment: {'DEPLOYMENT' if settings.IS_DEPLOYMENT or os.getenv('PORT') else 'DEVELOPMENT'}")
         logger.info(f"Debug mode: {settings.DEBUG}")
         
-        # Disable reload in production for deployment stability
-        reload = settings.DEBUG and not settings.IS_DEPLOYMENT
+        # Detect deployment environment
+        is_deployment = settings.IS_DEPLOYMENT or os.getenv("PORT") or os.getenv("REPLIT_DEPLOYMENT")
         
-        # Production-optimized uvicorn configuration for Cloud Run compatibility
+        # Disable reload in production for deployment stability
+        reload = settings.DEBUG and not is_deployment
+        
+        # Uvicorn configuration optimized for Replit deployments
         uvicorn_config = {
             "host": "0.0.0.0",
             "port": port,
             "reload": reload,
-            "timeout_keep_alive": 30,  # Cloud Run timeout compatibility
-            "timeout_graceful_shutdown": 30,  # Graceful shutdown
         }
         
         # Additional production settings for deployment
-        if settings.IS_DEPLOYMENT or os.getenv("PORT"):  # Cloud Run sets PORT
+        if is_deployment:
             uvicorn_config.update({
-                "workers": 1,  # Single worker for Cloud Run
+                "workers": 1,  # Single worker for autoscale deployments
                 "log_level": "info",
                 "access_log": True,
                 "use_colors": False,  # Better for deployment logs
-                "loop": "uvloop",  # Performance boost if available
             })
-            logger.info("Cloud Run production configuration applied")
+            logger.info("Deployment production configuration applied")
         else:
             logger.info("Development configuration applied")
         
