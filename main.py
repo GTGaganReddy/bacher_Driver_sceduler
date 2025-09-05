@@ -101,8 +101,9 @@ if __name__ == "__main__":
     import uvicorn
     
     try:
-        # Use PORT environment variable for deployment, default to 5000 for development
+        # Use PORT environment variable for deployment, default to 5000 for development  
         port = int(os.getenv("PORT", 5000))
+        logger.info(f"PORT environment variable: {os.getenv('PORT', 'Not set')}")
         logger.info(f"Starting FastAPI server on host 0.0.0.0 port {port}")
         logger.info(f"Environment: {'DEPLOYMENT' if settings.IS_DEPLOYMENT or os.getenv('PORT') else 'DEVELOPMENT'}")
         logger.info(f"Debug mode: {settings.DEBUG}")
