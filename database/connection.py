@@ -13,9 +13,16 @@ class DatabaseManager:
     async def init_pool(self):
         """Initialize connection pool - fallback to local for development when Supabase IPv6 unavailable"""
         try:
-            # Use Supabase session pooler connection to access authentic July 7-13, 2025 data
-            supabase_pooler_url = f"postgresql://postgres.nqwyglxhvhlrviknykmt:{settings.SUPABASE_PASSWORD}@aws-0-eu-north-1.pooler.supabase.com:5432/postgres"
-            database_url = supabase_pooler_url
+            # Use Supabase connection - try DATABASE_URL first for deployment compatibility
+            if settings.DATABASE_URL and "nqwyglxhvhlrviknykmt" in settings.DATABASE_URL:
+                # Use provided DATABASE_URL if it's pointing to the right Supabase instance
+                database_url = settings.DATABASE_URL
+                logger.info("Using DATABASE_URL for Supabase connection")
+            else:
+                # Fallback to building URL from password
+                supabase_pooler_url = f"postgresql://postgres.nqwyglxhvhlrviknykmt:{settings.SUPABASE_PASSWORD}@aws-0-eu-north-1.pooler.supabase.com:5432/postgres"
+                database_url = supabase_pooler_url
+                logger.info("Building Supabase URL from SUPABASE_PASSWORD")
             
             self.pool = await asyncpg.create_pool(
                 database_url,
