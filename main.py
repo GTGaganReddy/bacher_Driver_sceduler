@@ -17,20 +17,14 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting up Driver Scheduling Backend...")
     
-    # For deployment health checks, don't block startup on database initialization
-    # Database will be initialized lazily on first API call
-    if os.getenv("PORT"):  # Cloud Run sets PORT - indicates deployment
-        logger.info("Deployment environment detected - skipping blocking database initialization")
-        logger.info("Database will be initialized on first API call for faster health check response")
-    else:
-        # Local development - initialize database normally
-        try:
-            from api.dependencies import db_manager
-            await db_manager.init_pool()
-            logger.info("Database initialized successfully")
-        except Exception as e:
-            logger.error(f"Database initialization failed: {e}")
-            logger.info("Continuing startup without database - will retry connections on API calls")
+    # Always initialize database connection for reliable deployment behavior
+    try:
+        from api.dependencies import db_manager
+        await db_manager.init_pool()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}")
+        logger.info("Continuing startup - database will be initialized on first API call")
     
     yield
     
