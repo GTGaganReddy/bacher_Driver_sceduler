@@ -23,8 +23,7 @@ class DatabaseManager:
                 max_size=10,
                 command_timeout=60
             )
-            await self.create_tables()
-            # Skip inserting test data - we'll use the authentic data from your Supabase
+            # Skip table creation - using existing Supabase tables and data
             logger.info("Connected to Supabase via session pooler - using authentic July 7-13, 2025 data")
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
