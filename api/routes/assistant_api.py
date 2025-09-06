@@ -13,6 +13,7 @@ from services.database import DatabaseService
 from services.google_sheets import GoogleSheetsService
 from services.optimizer import SchedulingOptimizer
 from services.enhanced_optimizer import run_enhanced_ortools_optimization
+from services.multi_week_scheduler import MultiWeekScheduler
 from api.dependencies import db_manager
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,16 @@ class DeleteFixedAssignmentRequest(BaseModel):
 
 class ResetSystemRequest(BaseModel):
     week_start: str = Field("2025-07-07", description="Week start date to reset to (YYYY-MM-DD), defaults to 2025-07-07")
+
+
+class MultiWeekOptimizationRequest(BaseModel):
+    start_week: str = Field(..., description="Start week date (YYYY-MM-DD, must be a Monday)")
+    week_count: int = Field(..., ge=1, le=12, description="Number of weeks to schedule (1-12)")
+
+
+class GenerateMultiWeekRoutesRequest(BaseModel):
+    start_week: str = Field(..., description="Start week date (YYYY-MM-DD, must be a Monday)")
+    week_count: int = Field(..., ge=1, le=12, description="Number of weeks to generate routes for (1-12)")
 
 
 @router.post("/test-endpoint")
@@ -816,4 +827,152 @@ async def delete_fixed_assignment(request: DeleteFixedAssignmentRequest):
         
     except Exception as e:
         logger.error(f"Failed to delete fixed assignment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/generate-multi-week-routes")
+async def generate_multi_week_routes(request: GenerateMultiWeekRoutesRequest):
+    """Generate route patterns for multiple consecutive weeks"""
+    try:
+        logger.info(f"Generating routes for {request.week_count} weeks starting {request.start_week}")
+        
+        # Parse and validate start week (must be Monday)
+        start_week = datetime.strptime(request.start_week, '%Y-%m-%d').date()
+        if start_week.weekday() != 0:  # 0 = Monday
+            # Auto-correct to Monday of that week
+            start_week = get_week_start(start_week)
+            logger.info(f"Auto-corrected start week to Monday: {start_week}")
+        
+        # Initialize multi-week scheduler
+        scheduler = MultiWeekScheduler(db_manager)
+        
+        # Generate routes for multiple weeks
+        route_result = await scheduler.create_multi_week_routes_in_db(start_week, request.week_count)
+        
+        if not route_result["success"]:
+            raise HTTPException(status_code=500, detail=route_result["message"])
+        
+        # Generate availability for the same period
+        availability_result = await scheduler.generate_multi_week_availability(start_week, request.week_count)
+        
+        return {
+            "status": "success",
+            "message": f"Generated {request.week_count} weeks of routes and availability",
+            "route_generation": route_result,
+            "availability_generation": availability_result,
+            "period": {
+                "start_week": start_week.strftime('%Y-%m-%d'),
+                "week_count": request.week_count,
+                "total_days": request.week_count * 7,
+                "end_date": (start_week + timedelta(weeks=request.week_count, days=-1)).strftime('%Y-%m-%d')
+            }
+        }
+        
+    except ValueError as e:
+        logger.error(f"Invalid date format in multi-week route generation: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except Exception as e:
+        logger.error(f"Multi-week route generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/optimize-multi-week")
+async def optimize_multi_week(request: MultiWeekOptimizationRequest):
+    """Complete multi-week optimization: Generate routes -> OR-Tools -> Google Sheets"""
+    try:
+        logger.info(f"Multi-week optimization for {request.week_count} weeks starting {request.start_week}")
+        
+        # Parse and validate start week (must be Monday)
+        start_week = datetime.strptime(request.start_week, '%Y-%m-%d').date()
+        if start_week.weekday() != 0:  # 0 = Monday
+            # Auto-correct to Monday of that week
+            start_week = get_week_start(start_week)
+            logger.info(f"Auto-corrected start week to Monday: {start_week}")
+        
+        # Calculate end date for the multi-week period
+        end_week = start_week + timedelta(weeks=request.week_count - 1)
+        multi_week_end = get_week_end(end_week)
+        
+        # Initialize services
+        scheduler = MultiWeekScheduler(db_manager)
+        db_service = DatabaseService(db_manager)
+        sheets_service = GoogleSheetsService()
+        
+        # Step 1: Generate routes and availability for all weeks
+        logger.info("Step 1: Generating multi-week routes and availability")
+        route_result = await scheduler.create_multi_week_routes_in_db(start_week, request.week_count)
+        availability_result = await scheduler.generate_multi_week_availability(start_week, request.week_count)
+        
+        if not route_result["success"] or not availability_result["success"]:
+            raise HTTPException(status_code=500, detail="Failed to generate routes or availability")
+        
+        # Step 2: Fetch all data for optimization
+        logger.info("Step 2: Fetching data for optimization")
+        drivers = await db_service.get_drivers()
+        routes = await db_service.get_routes_by_date_range(start_week, multi_week_end)
+        availability = await db_service.get_availability_by_date_range(start_week, multi_week_end)
+        fixed_assignments = await db_service.get_fixed_assignments_by_date_range(start_week, multi_week_end)
+        
+        if not drivers or not routes:
+            raise HTTPException(status_code=404, detail="Missing drivers or routes data")
+        
+        logger.info(f"Loaded {len(drivers)} drivers, {len(routes)} routes, {len(availability)} availability records")
+        
+        # Step 3: Run enhanced OR-Tools optimization
+        logger.info("Step 3: Running enhanced OR-Tools optimization")
+        optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability, fixed_assignments)
+        
+        # Step 4: Generate dates for Google Sheets (all weeks)
+        logger.info("Step 4: Preparing Google Sheets update")
+        all_dates = []
+        for week_num in range(request.week_count):
+            current_week_start = start_week + timedelta(weeks=week_num)
+            week_dates = [(current_week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+            all_dates.extend(week_dates)
+        
+        # Step 5: Update Google Sheets with complete multi-week grid
+        logger.info(f"Step 5: Updating Google Sheets with {len(all_dates)} days grid")
+        sheets_result = await sheets_service.update_sheet(
+            optimization_result,
+            all_drivers=drivers,
+            all_dates=all_dates
+        )
+        sheets_success = sheets_result is not None
+        
+        # Step 6: Save results to database
+        logger.info("Step 6: Saving optimization results")
+        assignments = optimization_result.get('assignments', {})
+        await db_service.save_assignments(start_week, list(assignments.values()))
+        
+        return {
+            "status": "success",
+            "message": f"Multi-week optimization complete for {request.week_count} weeks",
+            "period": {
+                "start_week": start_week.strftime('%Y-%m-%d'),
+                "end_date": multi_week_end.strftime('%Y-%m-%d'),
+                "week_count": request.week_count,
+                "total_days": len(all_dates)
+            },
+            "optimization_stats": {
+                "total_assignments": sum(len(day_assignments) for day_assignments in assignments.values()),
+                "total_routes": len(routes),
+                "fixed_assignments_count": len(fixed_assignments),
+                "solver_status": optimization_result.get('solver_status')
+            },
+            "generation_results": {
+                "routes_created": route_result.get("routes_created", 0),
+                "availability_created": availability_result.get("availability_created", 0)
+            },
+            "google_sheets_updated": sheets_success,
+            "assignments": assignments,  # Full assignment details by date
+            "fixed_assignments": fixed_assignments,  # All fixed assignments details
+            "stats": optimization_result.get('stats', {}),  # Optimizer statistics
+            "unassigned_routes": optimization_result.get('unassigned_routes', [])  # Routes that couldn't be assigned
+        }
+        
+    except ValueError as e:
+        logger.error(f"Invalid input in multi-week optimization: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid input: {str(e)}")
+    except Exception as e:
+        logger.error(f"Multi-week optimization failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
