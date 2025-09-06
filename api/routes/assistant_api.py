@@ -4,8 +4,8 @@ Provides complete workflow: DB operations -> OR-Tools optimization -> Google She
 """
 
 from fastapi import APIRouter, HTTPException
-from datetime import datetime, timedelta
-from typing import Dict, Any, List
+from datetime import datetime, timedelta, date
+from typing import Dict, Any, List, Optional
 import logging
 from pydantic import BaseModel, Field
 
@@ -17,6 +17,18 @@ from api.dependencies import db_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/assistant", tags=["Assistant API"])
+
+
+def get_week_start(target_date: date) -> date:
+    """Calculate the Monday of the week containing the given date"""
+    days_since_monday = target_date.weekday()
+    week_start = target_date - timedelta(days=days_since_monday)
+    return week_start
+
+
+def get_week_end(week_start: date) -> date:
+    """Calculate the Sunday of the week starting on the given Monday"""
+    return week_start + timedelta(days=6)
 
 
 # Request Models
@@ -34,6 +46,7 @@ class SimpleAvailabilityUpdateRequest(BaseModel):
     driver_name: str = Field(..., description="Driver name from database")
     date: str = Field(..., description="Date in YYYY-MM-DD format")
     available: bool = Field(..., description="True if available, False if unavailable")
+    week_start: Optional[str] = Field(None, description="Week start for reoptimization (auto-calculated if not provided)")
 
 
 class RouteRequest(BaseModel):
@@ -49,11 +62,13 @@ class AddSingleRouteRequest(BaseModel):
     route_name: str = Field(..., description="Route name (e.g., '500')")
     date: str = Field(..., description="Route date (YYYY-MM-DD)")
     duration_hours: float = Field(..., description="Duration in hours")
+    week_start: Optional[str] = Field(None, description="Week start for reoptimization (auto-calculated if not provided)")
 
 
 class RemoveRouteRequest(BaseModel):
     route_name: str = Field(..., description="Route name to remove (e.g., '500')")
     date: str = Field(..., description="Route date (YYYY-MM-DD)")
+    week_start: Optional[str] = Field(None, description="Week start for reoptimization (auto-calculated if not provided)")
 
 
 class FixedAssignmentRequest(BaseModel):
@@ -65,6 +80,10 @@ class FixedAssignmentRequest(BaseModel):
 class DeleteFixedAssignmentRequest(BaseModel):
     driver_name: str = Field(..., description="Driver name from database")
     date: str = Field(..., description="Assignment date (YYYY-MM-DD)")
+
+
+class ResetSystemRequest(BaseModel):
+    week_start: str = Field("2025-07-07", description="Week start date to reset to (YYYY-MM-DD), defaults to 2025-07-07")
 
 
 @router.post("/test-endpoint")
@@ -239,11 +258,21 @@ async def update_single_driver_availability(request: SimpleAvailabilityUpdateReq
     try:
         logger.info(f"Assistant API: Simple update for {request.driver_name} on {request.date}")
         
+        # Calculate week_start if not provided
+        if request.week_start:
+            week_start_str = request.week_start
+        else:
+            # Auto-calculate week start from the given date
+            target_date = datetime.strptime(request.date, '%Y-%m-%d').date()
+            week_start_date = get_week_start(target_date)
+            week_start_str = week_start_date.strftime('%Y-%m-%d')
+            logger.info(f"Auto-calculated week_start: {week_start_str} for date {request.date}")
+        
         # Convert to the format expected by the main update_availability function
         availability_request = AvailabilityUpdateRequest(
             driver_name=request.driver_name,
             updates=[{"date": request.date, "available": request.available}],
-            week_start="2025-07-07"  # Default to July 2025 week
+            week_start=week_start_str
         )
         
         # Call the main availability update function
@@ -330,13 +359,23 @@ async def add_single_route(request: AddSingleRouteRequest):
         date_obj = datetime.strptime(request.date, "%Y-%m-%d")
         day_of_week = date_obj.strftime("%A").lower()
         
-        # Use existing logic with July 2025 week
+        # Calculate week_start if not provided
+        if request.week_start:
+            week_start_str = request.week_start
+        else:
+            # Auto-calculate week start from the given date
+            target_date = date_obj.date()
+            week_start_date = get_week_start(target_date)
+            week_start_str = week_start_date.strftime('%Y-%m-%d')
+            logger.info(f"Auto-calculated week_start: {week_start_str} for route date {request.date}")
+        
+        # Use existing logic with dynamic week calculation
         route_request = RouteRequest(
             route_name=request.route_name,
             date=request.date,
             duration_hours=request.duration_hours,
             day_of_week=day_of_week,
-            week_start="2025-07-07"  # Default to July 2025 week
+            week_start=week_start_str
         )
         
         return await add_route(route_request)
@@ -370,9 +409,16 @@ async def remove_route(request: RemoveRouteRequest):
             
             logger.info(f"Deleted route {request.route_name} (ID: {deleted_route['route_id']}) from {request.date}")
         
+        # Calculate week_start if not provided
+        if request.week_start:
+            week_start = datetime.strptime(request.week_start, '%Y-%m-%d').date()
+        else:
+            # Auto-calculate week start from the given date
+            week_start = get_week_start(route_date)
+            logger.info(f"Auto-calculated week_start: {week_start} for route date {request.date}")
+        
         # Get fresh data and reoptimize
-        week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
-        week_end = week_start + timedelta(days=6)
+        week_end = get_week_end(week_start)
         
         drivers = await db_service.get_drivers()
         routes = await db_service.get_routes_by_date_range(week_start, week_end)
@@ -416,10 +462,14 @@ async def remove_route(request: RemoveRouteRequest):
 
 
 @router.post("/reset")
-async def reset_system():
+async def reset_system(request: ResetSystemRequest = ResetSystemRequest(week_start="2025-07-07")):
     """Reset system to initial state with route recovery - clear assignments, reset availability, restore missing routes"""
     try:
-        logger.info("Assistant API: Resetting system to initial state with route recovery")
+        # Parse the reset week dates
+        reset_week_start = datetime.strptime(request.week_start, '%Y-%m-%d').date()
+        reset_week_end = get_week_end(reset_week_start)
+        
+        logger.info(f"Assistant API: Resetting system to initial state for week {reset_week_start} to {reset_week_end}")
         
         db_service = DatabaseService(db_manager)
         
@@ -436,25 +486,26 @@ async def reset_system():
             # Only remove routes added after August 11, 2025 to preserve original system data
             await conn.execute("""
                 DELETE FROM routes 
-                WHERE date BETWEEN '2025-07-07' AND '2025-07-13' 
+                WHERE date BETWEEN $1 AND $2 
                 AND created_at > '2025-08-11 21:10:00'
-            """)
-            logger.info("Cleared manually added routes (preserving original system routes)")
+            """, reset_week_start, reset_week_end)
+            logger.info(f"Cleared manually added routes for week {reset_week_start} to {reset_week_end} (preserving original system routes)")
             
-            # Reset all driver availability to true (available) for July 7-13, 2025
-            # Keep Sunday (2025-07-13) as unavailable for all drivers
+            # Reset all driver availability to true (available) for the reset week
+            # Keep Sunday unavailable for all drivers
+            reset_week_friday = reset_week_start + timedelta(days=5)  # Friday
             await conn.execute("""
                 UPDATE driver_availability 
                 SET available = true 
-                WHERE date BETWEEN '2025-07-07' AND '2025-07-12'
-            """)
+                WHERE date BETWEEN $1 AND $2
+            """, reset_week_start, reset_week_friday)
             
             # Ensure Sunday remains unavailable for all drivers
             await conn.execute("""
                 UPDATE driver_availability 
                 SET available = false 
-                WHERE date = '2025-07-13'
-            """)
+                WHERE date = $1
+            """, reset_week_end)
             
             logger.info("Reset driver availability - weekdays available, Sunday unavailable")
         
@@ -473,32 +524,24 @@ async def reset_system():
         
         # Get fresh data for verification
         drivers = await db_service.get_drivers()
-        routes = await db_service.get_routes_by_date_range(
-            datetime.strptime('2025-07-07', '%Y-%m-%d').date(),
-            datetime.strptime('2025-07-13', '%Y-%m-%d').date()
-        )
+        routes = await db_service.get_routes_by_date_range(reset_week_start, reset_week_end)
         
         # Run optimization with reset state and update Google Sheets
         optimizer = SchedulingOptimizer()
         sheets_service = GoogleSheetsService()
         
         # Get driver availability for the reset state
-        availability = await db_service.get_availability_by_date_range(
-            datetime.strptime('2025-07-07', '%Y-%m-%d').date(),
-            datetime.strptime('2025-07-13', '%Y-%m-%d').date()
-        )
+        availability = await db_service.get_availability_by_date_range(reset_week_start, reset_week_end)
         
-        # Get fixed assignments for both cases
-        week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
-        week_end = datetime.strptime('2025-07-13', '%Y-%m-%d').date()
-        fixed_assignments = await db_service.get_fixed_assignments_by_date_range(week_start, week_end)
+        # Get fixed assignments for the reset week
+        fixed_assignments = await db_service.get_fixed_assignments_by_date_range(reset_week_start, reset_week_end)
 
         if routes:
             # Run ENHANCED optimization with consecutive hours constraint
             optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability, fixed_assignments)
             
             # Update Google Sheets with reset state
-            week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+            week_dates = [(reset_week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
             sheets_result = await sheets_service.update_sheet(
                 optimization_result,
                 all_drivers=drivers,
@@ -508,12 +551,12 @@ async def reset_system():
             
             # Save optimization results
             assignments = optimization_result.get('assignments', {})
-            await db_service.save_assignments(week_start, list(assignments.values()))
+            await db_service.save_assignments(reset_week_start, list(assignments.values()))
             
             logger.info(f"Reset complete: optimized {len(routes)} routes, updated sheets: {sheets_updated}")
         else:
             # No routes - just clear sheets with empty data
-            week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+            week_dates = [(reset_week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
             optimization_result = {"assignments": {}, "stats": {"total_routes": 0, "assigned_routes": 0}, "unassigned_routes": []}
             sheets_result = await sheets_service.update_sheet(
                 optimization_result,
