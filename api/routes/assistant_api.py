@@ -4,8 +4,8 @@ Provides complete workflow: DB operations -> OR-Tools optimization -> Google She
 """
 
 from fastapi import APIRouter, HTTPException
-from datetime import datetime, timedelta, date
-from typing import Dict, Any, List, Optional
+from datetime import datetime, timedelta
+from typing import Dict, Any, List
 import logging
 from pydantic import BaseModel, Field
 
@@ -13,23 +13,10 @@ from services.database import DatabaseService
 from services.google_sheets import GoogleSheetsService
 from services.optimizer import SchedulingOptimizer
 from services.enhanced_optimizer import run_enhanced_ortools_optimization
-from services.multi_week_scheduler import MultiWeekScheduler
 from api.dependencies import db_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/assistant", tags=["Assistant API"])
-
-
-def get_week_start(target_date: date) -> date:
-    """Calculate the Monday of the week containing the given date"""
-    days_since_monday = target_date.weekday()
-    week_start = target_date - timedelta(days=days_since_monday)
-    return week_start
-
-
-def get_week_end(week_start: date) -> date:
-    """Calculate the Sunday of the week starting on the given Monday"""
-    return week_start + timedelta(days=6)
 
 
 # Request Models
@@ -47,7 +34,6 @@ class SimpleAvailabilityUpdateRequest(BaseModel):
     driver_name: str = Field(..., description="Driver name from database")
     date: str = Field(..., description="Date in YYYY-MM-DD format")
     available: bool = Field(..., description="True if available, False if unavailable")
-    week_start: Optional[str] = Field(None, description="Week start for reoptimization (auto-calculated if not provided)")
 
 
 class RouteRequest(BaseModel):
@@ -63,13 +49,11 @@ class AddSingleRouteRequest(BaseModel):
     route_name: str = Field(..., description="Route name (e.g., '500')")
     date: str = Field(..., description="Route date (YYYY-MM-DD)")
     duration_hours: float = Field(..., description="Duration in hours")
-    week_start: Optional[str] = Field(None, description="Week start for reoptimization (auto-calculated if not provided)")
 
 
 class RemoveRouteRequest(BaseModel):
     route_name: str = Field(..., description="Route name to remove (e.g., '500')")
     date: str = Field(..., description="Route date (YYYY-MM-DD)")
-    week_start: Optional[str] = Field(None, description="Week start for reoptimization (auto-calculated if not provided)")
 
 
 class FixedAssignmentRequest(BaseModel):
@@ -81,20 +65,6 @@ class FixedAssignmentRequest(BaseModel):
 class DeleteFixedAssignmentRequest(BaseModel):
     driver_name: str = Field(..., description="Driver name from database")
     date: str = Field(..., description="Assignment date (YYYY-MM-DD)")
-
-
-class ResetSystemRequest(BaseModel):
-    week_start: str = Field("2025-07-07", description="Week start date to reset to (YYYY-MM-DD), defaults to 2025-07-07")
-
-
-class MultiWeekOptimizationRequest(BaseModel):
-    start_week: str = Field(..., description="Start week date (YYYY-MM-DD, must be a Monday)")
-    week_count: int = Field(..., ge=1, le=12, description="Number of weeks to schedule (1-12)")
-
-
-class GenerateMultiWeekRoutesRequest(BaseModel):
-    start_week: str = Field(..., description="Start week date (YYYY-MM-DD, must be a Monday)")
-    week_count: int = Field(..., ge=1, le=12, description="Number of weeks to generate routes for (1-12)")
 
 
 @router.post("/test-endpoint")
@@ -269,21 +239,11 @@ async def update_single_driver_availability(request: SimpleAvailabilityUpdateReq
     try:
         logger.info(f"Assistant API: Simple update for {request.driver_name} on {request.date}")
         
-        # Calculate week_start if not provided
-        if request.week_start:
-            week_start_str = request.week_start
-        else:
-            # Auto-calculate week start from the given date
-            target_date = datetime.strptime(request.date, '%Y-%m-%d').date()
-            week_start_date = get_week_start(target_date)
-            week_start_str = week_start_date.strftime('%Y-%m-%d')
-            logger.info(f"Auto-calculated week_start: {week_start_str} for date {request.date}")
-        
         # Convert to the format expected by the main update_availability function
         availability_request = AvailabilityUpdateRequest(
             driver_name=request.driver_name,
             updates=[{"date": request.date, "available": request.available}],
-            week_start=week_start_str
+            week_start="2025-07-07"  # Default to July 2025 week
         )
         
         # Call the main availability update function
@@ -370,23 +330,13 @@ async def add_single_route(request: AddSingleRouteRequest):
         date_obj = datetime.strptime(request.date, "%Y-%m-%d")
         day_of_week = date_obj.strftime("%A").lower()
         
-        # Calculate week_start if not provided
-        if request.week_start:
-            week_start_str = request.week_start
-        else:
-            # Auto-calculate week start from the given date
-            target_date = date_obj.date()
-            week_start_date = get_week_start(target_date)
-            week_start_str = week_start_date.strftime('%Y-%m-%d')
-            logger.info(f"Auto-calculated week_start: {week_start_str} for route date {request.date}")
-        
-        # Use existing logic with dynamic week calculation
+        # Use existing logic with July 2025 week
         route_request = RouteRequest(
             route_name=request.route_name,
             date=request.date,
             duration_hours=request.duration_hours,
             day_of_week=day_of_week,
-            week_start=week_start_str
+            week_start="2025-07-07"  # Default to July 2025 week
         )
         
         return await add_route(route_request)
@@ -420,16 +370,9 @@ async def remove_route(request: RemoveRouteRequest):
             
             logger.info(f"Deleted route {request.route_name} (ID: {deleted_route['route_id']}) from {request.date}")
         
-        # Calculate week_start if not provided
-        if request.week_start:
-            week_start = datetime.strptime(request.week_start, '%Y-%m-%d').date()
-        else:
-            # Auto-calculate week start from the given date
-            week_start = get_week_start(route_date)
-            logger.info(f"Auto-calculated week_start: {week_start} for route date {request.date}")
-        
         # Get fresh data and reoptimize
-        week_end = get_week_end(week_start)
+        week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
+        week_end = week_start + timedelta(days=6)
         
         drivers = await db_service.get_drivers()
         routes = await db_service.get_routes_by_date_range(week_start, week_end)
@@ -473,14 +416,10 @@ async def remove_route(request: RemoveRouteRequest):
 
 
 @router.post("/reset")
-async def reset_system(request: ResetSystemRequest = ResetSystemRequest(week_start="2025-07-07")):
+async def reset_system():
     """Reset system to initial state with route recovery - clear assignments, reset availability, restore missing routes"""
     try:
-        # Parse the reset week dates
-        reset_week_start = datetime.strptime(request.week_start, '%Y-%m-%d').date()
-        reset_week_end = get_week_end(reset_week_start)
-        
-        logger.info(f"Assistant API: Resetting system to initial state for week {reset_week_start} to {reset_week_end}")
+        logger.info("Assistant API: Resetting system to initial state with route recovery")
         
         db_service = DatabaseService(db_manager)
         
@@ -497,26 +436,25 @@ async def reset_system(request: ResetSystemRequest = ResetSystemRequest(week_sta
             # Only remove routes added after August 11, 2025 to preserve original system data
             await conn.execute("""
                 DELETE FROM routes 
-                WHERE date BETWEEN $1 AND $2 
+                WHERE date BETWEEN '2025-07-07' AND '2025-07-13' 
                 AND created_at > '2025-08-11 21:10:00'
-            """, reset_week_start, reset_week_end)
-            logger.info(f"Cleared manually added routes for week {reset_week_start} to {reset_week_end} (preserving original system routes)")
+            """)
+            logger.info("Cleared manually added routes (preserving original system routes)")
             
-            # Reset all driver availability to true (available) for the reset week
-            # Keep Sunday unavailable for all drivers
-            reset_week_friday = reset_week_start + timedelta(days=5)  # Friday
+            # Reset all driver availability to true (available) for July 7-13, 2025
+            # Keep Sunday (2025-07-13) as unavailable for all drivers
             await conn.execute("""
                 UPDATE driver_availability 
                 SET available = true 
-                WHERE date BETWEEN $1 AND $2
-            """, reset_week_start, reset_week_friday)
+                WHERE date BETWEEN '2025-07-07' AND '2025-07-12'
+            """)
             
             # Ensure Sunday remains unavailable for all drivers
             await conn.execute("""
                 UPDATE driver_availability 
                 SET available = false 
-                WHERE date = $1
-            """, reset_week_end)
+                WHERE date = '2025-07-13'
+            """)
             
             logger.info("Reset driver availability - weekdays available, Sunday unavailable")
         
@@ -535,24 +473,32 @@ async def reset_system(request: ResetSystemRequest = ResetSystemRequest(week_sta
         
         # Get fresh data for verification
         drivers = await db_service.get_drivers()
-        routes = await db_service.get_routes_by_date_range(reset_week_start, reset_week_end)
+        routes = await db_service.get_routes_by_date_range(
+            datetime.strptime('2025-07-07', '%Y-%m-%d').date(),
+            datetime.strptime('2025-07-13', '%Y-%m-%d').date()
+        )
         
         # Run optimization with reset state and update Google Sheets
         optimizer = SchedulingOptimizer()
         sheets_service = GoogleSheetsService()
         
         # Get driver availability for the reset state
-        availability = await db_service.get_availability_by_date_range(reset_week_start, reset_week_end)
+        availability = await db_service.get_availability_by_date_range(
+            datetime.strptime('2025-07-07', '%Y-%m-%d').date(),
+            datetime.strptime('2025-07-13', '%Y-%m-%d').date()
+        )
         
-        # Get fixed assignments for the reset week
-        fixed_assignments = await db_service.get_fixed_assignments_by_date_range(reset_week_start, reset_week_end)
+        # Get fixed assignments for both cases
+        week_start = datetime.strptime('2025-07-07', '%Y-%m-%d').date()
+        week_end = datetime.strptime('2025-07-13', '%Y-%m-%d').date()
+        fixed_assignments = await db_service.get_fixed_assignments_by_date_range(week_start, week_end)
 
         if routes:
             # Run ENHANCED optimization with consecutive hours constraint
             optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability, fixed_assignments)
             
             # Update Google Sheets with reset state
-            week_dates = [(reset_week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+            week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
             sheets_result = await sheets_service.update_sheet(
                 optimization_result,
                 all_drivers=drivers,
@@ -562,12 +508,12 @@ async def reset_system(request: ResetSystemRequest = ResetSystemRequest(week_sta
             
             # Save optimization results
             assignments = optimization_result.get('assignments', {})
-            await db_service.save_assignments(reset_week_start, list(assignments.values()))
+            await db_service.save_assignments(week_start, list(assignments.values()))
             
             logger.info(f"Reset complete: optimized {len(routes)} routes, updated sheets: {sheets_updated}")
         else:
             # No routes - just clear sheets with empty data
-            week_dates = [(reset_week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+            week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
             optimization_result = {"assignments": {}, "stats": {"total_routes": 0, "assigned_routes": 0}, "unassigned_routes": []}
             sheets_result = await sheets_service.update_sheet(
                 optimization_result,
@@ -827,152 +773,4 @@ async def delete_fixed_assignment(request: DeleteFixedAssignmentRequest):
         
     except Exception as e:
         logger.error(f"Failed to delete fixed assignment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/generate-multi-week-routes")
-async def generate_multi_week_routes(request: GenerateMultiWeekRoutesRequest):
-    """Generate route patterns for multiple consecutive weeks"""
-    try:
-        logger.info(f"Generating routes for {request.week_count} weeks starting {request.start_week}")
-        
-        # Parse and validate start week (must be Monday)
-        start_week = datetime.strptime(request.start_week, '%Y-%m-%d').date()
-        if start_week.weekday() != 0:  # 0 = Monday
-            # Auto-correct to Monday of that week
-            start_week = get_week_start(start_week)
-            logger.info(f"Auto-corrected start week to Monday: {start_week}")
-        
-        # Initialize multi-week scheduler
-        scheduler = MultiWeekScheduler(db_manager)
-        
-        # Generate routes for multiple weeks
-        route_result = await scheduler.create_multi_week_routes_in_db(start_week, request.week_count)
-        
-        if not route_result["success"]:
-            raise HTTPException(status_code=500, detail=route_result["message"])
-        
-        # Generate availability for the same period
-        availability_result = await scheduler.generate_multi_week_availability(start_week, request.week_count)
-        
-        return {
-            "status": "success",
-            "message": f"Generated {request.week_count} weeks of routes and availability",
-            "route_generation": route_result,
-            "availability_generation": availability_result,
-            "period": {
-                "start_week": start_week.strftime('%Y-%m-%d'),
-                "week_count": request.week_count,
-                "total_days": request.week_count * 7,
-                "end_date": (start_week + timedelta(weeks=request.week_count, days=-1)).strftime('%Y-%m-%d')
-            }
-        }
-        
-    except ValueError as e:
-        logger.error(f"Invalid date format in multi-week route generation: {e}")
-        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
-    except Exception as e:
-        logger.error(f"Multi-week route generation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/optimize-multi-week")
-async def optimize_multi_week(request: MultiWeekOptimizationRequest):
-    """Complete multi-week optimization: Generate routes -> OR-Tools -> Google Sheets"""
-    try:
-        logger.info(f"Multi-week optimization for {request.week_count} weeks starting {request.start_week}")
-        
-        # Parse and validate start week (must be Monday)
-        start_week = datetime.strptime(request.start_week, '%Y-%m-%d').date()
-        if start_week.weekday() != 0:  # 0 = Monday
-            # Auto-correct to Monday of that week
-            start_week = get_week_start(start_week)
-            logger.info(f"Auto-corrected start week to Monday: {start_week}")
-        
-        # Calculate end date for the multi-week period
-        end_week = start_week + timedelta(weeks=request.week_count - 1)
-        multi_week_end = get_week_end(end_week)
-        
-        # Initialize services
-        scheduler = MultiWeekScheduler(db_manager)
-        db_service = DatabaseService(db_manager)
-        sheets_service = GoogleSheetsService()
-        
-        # Step 1: Generate routes and availability for all weeks
-        logger.info("Step 1: Generating multi-week routes and availability")
-        route_result = await scheduler.create_multi_week_routes_in_db(start_week, request.week_count)
-        availability_result = await scheduler.generate_multi_week_availability(start_week, request.week_count)
-        
-        if not route_result["success"] or not availability_result["success"]:
-            raise HTTPException(status_code=500, detail="Failed to generate routes or availability")
-        
-        # Step 2: Fetch all data for optimization
-        logger.info("Step 2: Fetching data for optimization")
-        drivers = await db_service.get_drivers()
-        routes = await db_service.get_routes_by_date_range(start_week, multi_week_end)
-        availability = await db_service.get_availability_by_date_range(start_week, multi_week_end)
-        fixed_assignments = await db_service.get_fixed_assignments_by_date_range(start_week, multi_week_end)
-        
-        if not drivers or not routes:
-            raise HTTPException(status_code=404, detail="Missing drivers or routes data")
-        
-        logger.info(f"Loaded {len(drivers)} drivers, {len(routes)} routes, {len(availability)} availability records")
-        
-        # Step 3: Run enhanced OR-Tools optimization
-        logger.info("Step 3: Running enhanced OR-Tools optimization")
-        optimization_result = run_enhanced_ortools_optimization(drivers, routes, availability, fixed_assignments)
-        
-        # Step 4: Generate dates for Google Sheets (all weeks)
-        logger.info("Step 4: Preparing Google Sheets update")
-        all_dates = []
-        for week_num in range(request.week_count):
-            current_week_start = start_week + timedelta(weeks=week_num)
-            week_dates = [(current_week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
-            all_dates.extend(week_dates)
-        
-        # Step 5: Update Google Sheets with complete multi-week grid
-        logger.info(f"Step 5: Updating Google Sheets with {len(all_dates)} days grid")
-        sheets_result = await sheets_service.update_sheet(
-            optimization_result,
-            all_drivers=drivers,
-            all_dates=all_dates
-        )
-        sheets_success = sheets_result is not None
-        
-        # Step 6: Save results to database
-        logger.info("Step 6: Saving optimization results")
-        assignments = optimization_result.get('assignments', {})
-        await db_service.save_assignments(start_week, list(assignments.values()))
-        
-        return {
-            "status": "success",
-            "message": f"Multi-week optimization complete for {request.week_count} weeks",
-            "period": {
-                "start_week": start_week.strftime('%Y-%m-%d'),
-                "end_date": multi_week_end.strftime('%Y-%m-%d'),
-                "week_count": request.week_count,
-                "total_days": len(all_dates)
-            },
-            "optimization_stats": {
-                "total_assignments": sum(len(day_assignments) for day_assignments in assignments.values()),
-                "total_routes": len(routes),
-                "fixed_assignments_count": len(fixed_assignments),
-                "solver_status": optimization_result.get('solver_status')
-            },
-            "generation_results": {
-                "routes_created": route_result.get("routes_created", 0),
-                "availability_created": availability_result.get("availability_created", 0)
-            },
-            "google_sheets_updated": sheets_success,
-            "assignments": assignments,  # Full assignment details by date
-            "fixed_assignments": fixed_assignments,  # All fixed assignments details
-            "stats": optimization_result.get('stats', {}),  # Optimizer statistics
-            "unassigned_routes": optimization_result.get('unassigned_routes', [])  # Routes that couldn't be assigned
-        }
-        
-    except ValueError as e:
-        logger.error(f"Invalid input in multi-week optimization: {e}")
-        raise HTTPException(status_code=400, detail=f"Invalid input: {str(e)}")
-    except Exception as e:
-        logger.error(f"Multi-week optimization failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
